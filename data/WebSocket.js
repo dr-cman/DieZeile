@@ -119,6 +119,12 @@ function sendModeText() {
     connection.send(sendStr);
 }
 
+function sendModeTextClock() {
+    var sendStr = 'M' + '6';    
+    console.log('Mode: ' + sendStr); 
+    connection.send(sendStr);
+}
+
 function sendSSID() {
     var i = document.getElementById('ssidID').value;
     var sendStr = 'I'+ i;    
