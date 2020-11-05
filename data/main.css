@@ -1,0 +1,106 @@
+center {
+    width: 420px;
+    max-width: 100%;
+    margin: 0px auto;
+    font-family: 'Roboto', sans-serif;
+}
+
+h1 {
+    background-color: #FF0000;
+    color: white;
+    padding: 10px;
+    margin: 0px;
+    box-shadow: 1px 1px 5px #555555;
+}
+
+h3 {
+    padding: 7px;
+    margin: 0px;
+}
+
+h4 {
+    background-color: #CCCCCC;
+    color: white;
+    padding: 10px;
+    margin: 0px;
+    box-shadow: 1px 1px 5px #555555;
+}
+
+center>div {
+    padding: 5px 1px 1px 1px;
+    box-shadow: 1px 1px 4px #555555;
+}
+
+
+
+/* ============================= input type range ============================= */
+input[type=range] {
+  -webkit-appearance: none;
+  margin: 5px 10px;
+  width: 98%;
+}
+
+input[type=range]:focus {
+  outline: none;
+}
+
+input[type=range]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  margin-top: -15px;
+  cursor: pointer;
+  box-shadow: 1px 1px 1px #000000, 0px 0px 1px #0d0d0d;
+  background: #FF0000;
+  border-radius: 1.3px;
+  border: 0.2px solid #010101;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  box-shadow: 1px 1px 1px #000000, 0px 0px 1px #0d0d0d;
+  border: 1px solid #000000;
+  height: 20px;
+  width: 15px;
+  border-radius: 10px;
+  background: #000000;
+  cursor: pointer;
+  margin-top: -9px;
+}
+
+input[type=range]::-moz-range-track {
+  width: 100%;
+  height: 4px;
+  cursor: pointer;
+  box-shadow: 1px 1px 1px #000000, 0px 0px 1px #0d0d0d;
+  background: #FF0000;
+  border-radius: 1.3px;
+  border: 0.2px solid #010101;
+}
+
+input[type=range]::-moz-range-thumb {
+  box-shadow: 1px 1px 1px #000000, 0px 0px 1px #0d0d0d;
+  border: 1px solid #000000;
+  height: 20px;
+  width: 15px;
+  border-radius: 10px;
+  background: #000000;
+  cursor: pointer;
+}
+
+
+
+/* ============================= input type text ============================= */
+input[type=text] {
+    outline: none;
+    width: 95%;
+    margin: 3px;
+}
+
+
+
+/* =========================== input type password =========================== */
+input[type=password] {
+    outline: none;
+    width: 95%;
+    margin: 3px;
+}

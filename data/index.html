@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <title>Die Zeile</title>
+    <link href='main.css' rel='stylesheet' type='text/css'>
+    <link rel="icon" type="image/png" sizes="144x144"  href="/favicon-144x144.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon.ico">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#00878f">
+    <meta charset="utf-8"/>
+    <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' name='viewport'>
+    <script src="WebSocket.js" type="text/javascript"></script>
+</head>
+
+<body>
+    <center>
+        <header>
+            <h1>Die Zeile</h1>
+        </header>
+		<div>
+            <h3>Helligkeit</h3>
+            <td>
+                <input id="brightnessID" style="width: 95%" type="range" min="1" max="15" step="1" oninput="sendBrightness()" value="1">
+            </td>
+        </div>
+        <div>
+            <h3>Betriebsart</h3>
+			<table>
+				<tr>
+					<label class="radio-inline">
+						<input type="radio" id="modeClockID" name="mode" onchange="sendModeClock()" checked>Uhr
+					</label>                    
+                    <label class="radio-inline">
+                        <input type="radio" id="modeMathID" name="mode" onchange="sendModeMath()">Mathe Uhr
+                    </label>                    
+                    <label class="radio-inline">
+                        <input type="radio" id="modeAddOnlyID" name="mode" onchange="sendModeAddOnly()">Summe Uhr
+                    </label>        
+					<br />
+                    <label class="radio-inline">
+                        <input type="radio" id="modeProgressID" name="mode" onchange="sendModeProgress()">Balken Uhr
+                    </label>                    
+                    <label class="radio-inline">
+                        <input type="radio" id="modeTextID" name="mode" onchange="sendModeText()">Laufschrift
+					</label>                    
+					<p style="margin: 5px">
+				</tr>
+			</table>
+		</div>
+        <div>
+            <h3>Laufschrift</h3>
+            <table>
+                <tr>
+                    <td style="width:10px; text-align: right">Text: </td>
+					<td>
+						<input id="textID" type="text" name="scrolltext" maxlength="80" onfocusout="sendText()">
+					</td>
+                </tr>
+                <tr>
+                    <td style="width:10px; text-align: right">Tempo: </td>
+                    <td>
+                        <input id="speedID" type="range" min="5" max="42" step="1" oninput="sendSpeed()" value="30">
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div>
+            <h3>WiFi Zugang</h3>
+            <table>
+                <tr>
+                    <td style="width:10px; text-align: right">SSID: </td>
+                    <td>
+                        <input id="ssidID" type="text" name="ssid" maxlength="30" onfocusout="sendSSID()">
+                    </td>
+                </tr>
+                <tr>
+                    <td style="width:10px; text-align: right">Passwort: </td>
+                    <td>
+                        <input id="passwordID" type="password" name="password" maxlength="30" onfocusout="sendPassword()">
+                    </td>
+                </tr>
+            </table>
+            <p style="margin: 10px">
+        </div>
+        <div>
+            <table>
+                <tr>
+					<td>
+					    <button id="saveID" style="padding: 5px 10px 5px 10px; margin: 7px 0px 0px 0px;" onclick="saveConfig();">Einstellungen speichern und neu starten</button></p>
+					</td>
+                </tr>
+            </table>
+        </div>
+        <h4 id="statusID">SSID: Die Zeile <br> IP: 192.168.4.1</h2>
+	</center>
+</body>
+</html>
