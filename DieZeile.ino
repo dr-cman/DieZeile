@@ -43,6 +43,7 @@
 #include <string.h>
 #include <time.h>
 #include <WebSocketsServer.h>
+#include "WlanCredentials.h"
 
 #define DEBUG_MQ
 //#define DEBUG_CLOCK
@@ -184,8 +185,8 @@ void eepromReadConfig(void)
         config.mode = 2;
         config.speed = 32;
         strcpy(config.message, "Die Zeile !");
-        strcpy(config.ssid, "YOUR AP HERE");
-        strcpy(config.password, "YOUR PWD HERE");
+        strcpy(config.ssid, YOURWLANAP);
+        strcpy(config.password, YOURPASSWORD);
         eepromWriteConfig();
     }
     else
