@@ -21,6 +21,14 @@ connection.onmessage = function (e) {
 		message = message.slice('b'.length);
 		document.getElementById('brightnessID').value = message;
 	}
+    if(message.startsWith('SP')) {
+		message = message.slice('SP'.length);
+		document.getElementById('secretPeriodID').value = message;
+	}
+    if(message.startsWith('SW')) {
+		message = message.slice('SW'.length);
+		document.getElementById('secretWindowID').value = message;
+	}
     if(message.startsWith('m')) {
 		message = message.slice('m'.length);
         document.getElementById('modeClockID').checked = false;
@@ -42,6 +50,30 @@ connection.onmessage = function (e) {
 		}
 		if(message == '5') {
 			document.getElementById('modeTextID').checked = true;
+		}
+		if(message == '6') {
+			document.getElementById('modeTextClockID').checked = true;
+		}
+		if(message == '7') {
+			document.getElementById('modeSetTheoryClockID').checked = true;
+		}
+		if(message == '8') {
+			document.getElementById('modeFontClockID').checked = true;
+		}
+	}
+    if(message.startsWith('f')) {
+		message = message.slice('f'.length);
+        document.getElementById('fontClassicID').checked = false;
+        document.getElementById('fontBoldID').checked = false;
+        document.getElementById('fontSmallID').checked = false;
+		if(message == '0') {
+			document.getElementById('fontSmallID').checked = true;
+		}
+		if(message == '1') {
+			document.getElementById('fontBoldID').checked = true;
+		}
+		if(message == '2') {
+			document.getElementById('fontClassicID').checked = true;
 		}
 	}
     if(message.startsWith('s')) {
@@ -113,15 +145,59 @@ function sendModeProgress() {
     connection.send(sendStr);
 }
 
+function sendModeTextClock() {
+    var sendStr = 'M' + '6';    
+    console.log('Mode: ' + sendStr); 
+    connection.send(sendStr);
+}
+
+function sendModeSetTheoryClock() {
+    var sendStr = 'M' + '7';    
+    console.log('Mode: ' + sendStr); 
+    connection.send(sendStr);
+}
+
+function sendModeFontClock() {
+    var sendStr = 'M' + '8';    
+    console.log('Mode: ' + sendStr); 
+    connection.send(sendStr);
+}
+
 function sendModeText() {
     var sendStr = 'M' + '5';    
     console.log('Mode: ' + sendStr); 
     connection.send(sendStr);
 }
 
-function sendModeTextClock() {
-    var sendStr = 'M' + '6';    
-    console.log('Mode: ' + sendStr); 
+function setFontSmall() {
+    var sendStr = 'f' + '0';    
+    console.log('Font: ' + sendStr); 
+    connection.send(sendStr);
+}
+
+function setFontBold() {
+    var sendStr = 'f' + '1';    
+    console.log('Font: ' + sendStr); 
+    connection.send(sendStr);
+}
+
+function setFontClassic() {
+    var sendStr = 'f' + '2';    
+    console.log('Font: ' + sendStr); 
+    connection.send(sendStr);
+}
+
+function sendSectretPeriodInSec() {
+    var i = document.getElementById('secretPeriodID').value;
+    var sendStr = 'sP'+ i.toString(10);    
+    console.log('SecretPeriod: ' + sendStr); 
+    connection.send(sendStr);
+}
+
+function sendSectretWindowInSec() {
+    var i = document.getElementById('secretWindowID').value;
+    var sendStr = 'sW'+ i.toString(10);    
+    console.log('SecretWindow: ' + sendStr); 
     connection.send(sendStr);
 }
 
