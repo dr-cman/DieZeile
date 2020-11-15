@@ -4,14 +4,17 @@ An ESP8266 based 64x8 LED matrix display with wlan connectivity and browser base
 
 <h2>Featured operation modes</h2>
 
+'DieZeile' features different operation modes to display the current time/date information, to offer a timer/stop watch function or a scrolling display of user configurable information messages or the current time
+
 <h3>Clock modes</h3>
 
-* Classic
-* Math (Mathe)
-* Bar (Balken)
-* Set (Mengen)
-* Font (Font)
-* Percent (Prozent)
+<h4>Classic</h4>
+
+<h4>Math (Mathe)</h4>
+<h4>Bar (Balken)</h4>
+<h4>Set (Mengen)</h4>
+<h4>Font (Font)</h4>
+<h4>Percent (Prozent)</h4>
 
 <h3>Text display modes</h3>
 
