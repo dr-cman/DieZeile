@@ -47,7 +47,6 @@ connection.onmessage = function (e) {
 			window.clearInterval(timer);
 			timerRefreshEnd=false;
 		};
-
 	}
 };
 
@@ -121,7 +120,6 @@ function timerStartPause() {
 
 		// stop refresher
 		timerRefreshEnd=true;
-		//window.clearInterval(timer);
 		
 		// start timer
 		sendStr = 'ts2';    
@@ -137,7 +135,6 @@ function timerReset() {
 	
 	// stop refresher
 	timerRefreshEnd=true;
-	//window.clearInterval(timer);
 
 	var sendStr = 'ts0';    
 	console.log('Timer: ' + sendStr + ' (reset)'); 
@@ -152,7 +149,6 @@ function timerClear() {
 	
 	// stop refresher
 	timerRefreshEnd=true;
-	//window.clearInterval(timer);
 
 	var sendStr = 'tt0';    
 	console.log('Timer: ' + sendStr + ' (set timer)'); 
@@ -171,11 +167,8 @@ function timerExit() {
 
 	// stop refresher
 	timerRefreshEnd=true;
-	//window.clearInterval(timer);
-		
 
 	// display timer page
-	//window.open("index.html");
 	window.location.href = 'index.html';
 }
 

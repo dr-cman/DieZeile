@@ -66,10 +66,13 @@
 #include <WebSocketsServer.h>
 #include "WlanCredentials.h"
 
-#define DEBUG_MQ
-//#define DEBUG_CLOCK
-#define DEBUG_SECRETS
-//#define DEBUG_SECRETS_MESSAGES
+                                              // debugging defines
+//#define DEBUG_MQ                              // message queue
+//#define DEBUG_SETCOMMANDS
+//#define DEBUG_CLOCK                           // clock
+#define DEBUG_SECRETS                         // secrets
+//#define DEBUG_SECRETS_MESSAGES                // secret messages
+//#define DEBUG_TIMER                           // timer
 
 #define DATA_PIN                           13 // DIN Scroll Matrix
 #define LOAD_PIN                           15 // CS  Scroll Matrix
@@ -115,7 +118,7 @@ const char *OTAPassword  = "hrlbrmpf";
 
 const char* mdnsName     = "DieZeile";          // Domain name for the mDNS responder
 
-char initMessage[] = "Bitte mit \"Die Zeile\" verbinden (Passwort \"DieZeile\") und IP 192.168.4.1 aufrufen.";
+
 char currentMessage[MAX_NOF_CHARS_OF_MSG];
 
 char MQ[MAX_NOF_MQMSG][MAX_NOF_CHARS_OF_MSG];   // message queue buffer
@@ -130,51 +133,51 @@ bool recordDisplayBuffer=false;
 uint8_t displayBuffer[64];
 #endif
 
-int  lastMode=0;                         // Remember last mode if secret is displayed
-bool display_mode_changed  = false;      // Remember if display mode changed
-bool connectedAP           = false;      // Remember if connected to an external AP
-bool validTime             = false;      // true, when valid time information is available  
-unsigned long prevMillis   = millis();   // Initialize current millisecond
-struct tm *currentTime;                  // Store current time in this variable
+int  lastMode=0;                            // Remember last mode if secret is displayed
+bool display_mode_changed  = false;         // Remember if display mode changed
+bool connectedAP           = false;         // Remember if connected to an external AP
+bool validTime             = false;         // true, when valid time information is available  
+unsigned long prevMillis   = millis();      // Initialize current millisecond
+struct tm *currentTime;                     // Store current time in this variable
 
 MD_MAX72XX mx = MD_MAX72XX(HARDWARE_TYPE, DATA_PIN, CLOCK_PIN, LOAD_PIN, MAX_NOF_DISPLAYS); // Initialize display HW
 
-ESP8266WebServer server(80);             // Create a web server on port 80
-WebSocketsServer webSocket(81);          // Create a websocket server on port 81
+ESP8266WebServer server(80);                // Create a web server on port 80
+WebSocketsServer webSocket(81);             // Create a websocket server on port 81
 
-File fsUploadFile;                       // A File variable to temporarily store the received file
+File fsUploadFile;                          // A File variable to temporarily store the received file
 
-enum { DM_NORMAL=0, DM_BLINK=1, DM_GLOW=2, DM_RAMPUP=3, DM_RAMPDOWN=4 };
-enum { TS_SET, TS_RUNNING, TS_PAUSE, TS_EXIT } timerState = TS_SET;
-int remainingSeconds=0;
+enum { DM_NORMAL=0, DM_BLINK=1, DM_GLOW=2, DM_RAMPUP=3, DM_RAMPDOWN=4 };    // display modes
+enum { TS_SET, TS_RUNNING, TS_PAUSE, TS_EXIT } timerState = TS_SET;         // timer states
+int remainingSeconds=0;                                                     // remaining timer time
 
 
-struct {                                 // config struct storing all relevant data in EEPROM
-    char MAC[18];                        // 'xx.xx.xx.xx.xx.xx'
-    uint8_t brightness;
-    uint8_t mode;
-    uint8_t speed;
-    char message[MAX_NOF_CHARS_OF_MSG];
-    char ssid[MAX_NOF_CHARS_OF_AP];
-    char password[MAX_NOF_CHARS_OF_AP];
-    int secretPeriod;
-    int secretWindow;
-    int clockFont;
-    int displayMode;
-    int timerTime;
-    int clockMode;
-    int mathMode;
-    int displayPeriod;
-    int displayDuration;
-    int timerState;
+struct {                                    // config struct storing all relevant data in EEPROM
+    char MAC[18];                           // 'xx.xx.xx.xx.xx.xx'
+    uint8_t brightness;                     // display brightness
+    uint8_t mode;                           // operation mode
+    uint8_t speed;                          // scrolling speed
+    char message[MAX_NOF_CHARS_OF_MSG];     //
+    char ssid[MAX_NOF_CHARS_OF_AP];         // SSID
+    char password[MAX_NOF_CHARS_OF_AP];     // password
+    int secretPeriod;                       // secret period = min distancs between display of secrets 
+    int secretWindow;                       // secret window 
+    int clockFont;                          // clock fonts (0=small, 1=bold, 2=normal)
+    int displayMode;                        // display modes (0=normal, 1=blink, 2=glow, 3=ramp-up, 4=ramp-down
+    int timerTime;                          // timer time
+    int clockMode;                          // clock mode (0=numeric display of time & date, 1=display month as string) 
+    int mathMode;                           // 0=all operations (+-*/)  1=+ only
+    int displayPeriod;                      // 
+    int displayDuration;                    // duration of display mode (if display mode != normal)
+    int timerState;                         // timer state (see enum timer State)
 } config;
 
-typedef struct t_Secret {               // Secret struct to store secret information read from file
-  int day;
-  int month;
-  size_t position;
+typedef struct t_Secret {                   // Secret struct to store secret information read from file
+  int day;                                  // day
+  int month;                                // month
+  size_t position;                          // index to file position of secret text
 } Secret;
-Secret *Secrets=NULL;                   // dynamically loaded secrets (from SPIFFS file secrets.txt)
+Secret *Secrets=NULL;                       // dynamically loaded secrets (from SPIFFS file secrets.txt)
 
 /*************************************************************************************************************************************/
 /*************************************************   H E L P E R   F U N C T I O N S   ***********************************************/
@@ -313,7 +316,7 @@ bool handleFileRead(String path)
             path += ".gz";                                  // Use the compressed verion
         }
         File file = SPIFFS.open(path, "r");                 // Open the file
-        size_t sent = server.streamFile(file, contentType); // Send it to the client
+        server.streamFile(file, contentType);               // Send it to the client
         file.close();                                       // Close the file again
         Serial.println(String("\tSent file: ") + path);
         return true;
@@ -380,7 +383,7 @@ void handleSet()
 
 void handleTimer()
 {
-  
+  Serial.printf("TimerMode entered\n");
 }
 
 // Upload a new file to the SPIFFS
@@ -542,14 +545,18 @@ void setBrightness(int newBrightness)
     config.brightness = newBrightness;
     mx.control(MD_MAX72XX::INTENSITY, config.brightness);  
 
+    #ifdef DEBUG_SETCOMMANDS
     Serial.printf("set brightness=%d\n", config.brightness);
+    #endif
 }
 
 void setSpeed(int newSpeed)
 {
     config.speed = SCROLL_MAX_SPEED - (newSpeed - SCROLL_MIN_SPEED);
 
+    #ifdef DEBUG_SETCOMMANDS
     Serial.printf("set speed=%d\n", config.speed);
+    #endif
 }
 
 void setMode(int newMode)
@@ -565,16 +572,22 @@ void setMode(int newMode)
       }
       display_mode_changed = true;
    
+      #ifdef DEBUG_SETCOMMANDS
       Serial.printf("set mode=%d\n", config.mode);
+      #endif
     }
+    #ifdef DEBUG_SETCOMMANDS
     else
       Serial.printf("set mode=%d (no change)\n", config.mode);
+    #endif
 }
 
 void setDisplayMode(int newDisplayMode)
 {
     if(config.displayMode!=DM_NORMAL) {                 // mode change only if normal mode is active
+      #ifdef DEBUG_SETCOMMANDS
       Serial.printf("set displaymode=%d (currently not allowed)\n", newDisplayMode);
+      #endif
       return;
     }
 
@@ -587,41 +600,55 @@ void setDisplayMode(int newDisplayMode)
           config.displayMode=newDisplayMode;
           break;
       default:
-      Serial.printf("set displaymode=%d (no change)\n", config.displayMode);
+          #ifdef DEBUG_SETCOMMANDS
+          Serial.printf("set displaymode=%d (no change)\n", config.displayMode);
+          #endif
           config.displayMode=DM_NORMAL;
     }
+    #ifdef DEBUG_SETCOMMANDS
     Serial.printf("set displaymode=%d\n", config.displayMode);
+    #endif
 }
 
 void setDisplayPeriod(int newPeriod)
 {
     config.displayPeriod = newPeriod;
+    #ifdef DEBUG_SETCOMMANDS
     Serial.printf("set displayPeriod=%d\n", config.displayPeriod);
+    #endif
 }
 
 void setSecretPeriod(int newPeriod)
 {
     config.secretPeriod = newPeriod;
+    #ifdef DEBUG_SETCOMMANDS
     Serial.printf("set secretPeriod=%d\n", config.secretPeriod);
+    #endif
 }
 
 void setSecretWindow(int newWindow)
 {
     config.secretWindow = newWindow;
+    #ifdef DEBUG_SETCOMMANDS
     Serial.printf("set secretWindow=%d\n", config.secretWindow);
+    #endif
 }
 
 void setTimerTime(int time)
 {
     config.timerTime=time;
+    #ifdef DEBUG_SETCOMMANDS
     Serial.printf("set timerTime=%d\n", config.timerTime);
+    #endif
     config.timerState=timerState=TS_SET;
 }
 
 void setTimerState(int newState)
 {
     config.timerState=newState;
+    #ifdef DEBUG_SETCOMMANDS
     Serial.printf("set timerState=%d\n", config.timerState);
+    #endif
     switch(newState){
       case TS_RUNNING:  timerState=TS_RUNNING;  break;
       case TS_SET:      timerState=TS_SET;      break;
@@ -633,21 +660,27 @@ void setTimerState(int newState)
 void setClockFont(int newFont)
 {
     config.clockFont = newFont;
+    #ifdef DEBUG_SETCOMMANDS
     display_mode_changed = true;
+    #endif
     Serial.printf("set clockFont=%d\n", config.clockFont);
 }
 
 void setClockMode(int newMode)
 {
     config.clockMode = newMode;
+    #ifdef DEBUG_SETCOMMANDS
     display_mode_changed = true;
+    #endif
     Serial.printf("set clockMode=%d\n", config.clockMode);
 }
 
 void setMathMode(int newMode)
 {
     config.mathMode = newMode;
+    #ifdef DEBUG_SETCOMMANDS
     display_mode_changed = true;
+    #endif
     Serial.printf("set mathMode=%d\n", config.mathMode);
 }
 
@@ -676,6 +709,7 @@ void setSaveConfig()
 
 // ------------------------------------------------------------------------------------------------------------------------------------
 // mqInit() initializes the message queue
+// ------------------------------------------------------------------------------------------------------------------------------------
 void mqInit()
 {
   #ifdef DEBUG_MQ  
@@ -690,9 +724,9 @@ void mqInit()
   #endif
 }
 
-
 // ------------------------------------------------------------------------------------------------------------------------------------
 // mqClear() clears all messages in queue
+// ------------------------------------------------------------------------------------------------------------------------------------
 void mqClear()
 {
   MQcount=0;
@@ -705,6 +739,7 @@ void mqClear()
 
 // ------------------------------------------------------------------------------------------------------------------------------------
 // mqAdd() uses the message queue as a ring buffer and adds/replaces the new message at position 'MQnextAdd'
+// ------------------------------------------------------------------------------------------------------------------------------------
 void mqAdd(String text)
 {
   #ifdef DEBUG_MQ  
@@ -716,7 +751,7 @@ void mqAdd(String text)
       if(MQ[MQnextAdd][0]=='\0')                              // new entry and no replacement
             MQcount++;
       strcpy(MQ[MQnextAdd], text.c_str());                    // add new (or replace existing) message
-      MQnextAdd=++MQnextAdd%MAX_NOF_MQMSG;                    // update ring buffer pointer
+      MQnextAdd=(++MQnextAdd)%MAX_NOF_MQMSG;                    // update ring buffer pointer
   }
 
   #ifdef DEBUG_MQ  
@@ -726,6 +761,7 @@ void mqAdd(String text)
 
 // ------------------------------------------------------------------------------------------------------------------------------------
 // mqAddAt() sets a message at queue position 'index'. 
+// ------------------------------------------------------------------------------------------------------------------------------------
 void mqAddAt(int index, String text)
 {
   #ifdef DEBUG_MQ  
@@ -747,10 +783,13 @@ void mqAddAt(int index, String text)
 
 // ------------------------------------------------------------------------------------------------------------------------------------
 // mqDelete() deletes the queue element at position 'index'
+// ------------------------------------------------------------------------------------------------------------------------------------
 void mqDelete(int index)
 {
+  #ifdef DEBUG_MQ  
   Serial.printf("mqDelete(%d)\n", index);
-
+  #endif
+  
   if(0<=index && index<MAX_NOF_MQMSG &&                       // valid index and
       MQ[index][0]!='\0')                                     //   MQ entry not empty
   {
@@ -765,6 +804,7 @@ void mqDelete(int index)
 
 // ------------------------------------------------------------------------------------------------------------------------------------
 // sets the queue delimiter text
+// ------------------------------------------------------------------------------------------------------------------------------------
 void mqDelimiter(String delimiter)
 {
   strcpy(MQD, delimiter.c_str());
@@ -776,6 +816,7 @@ void mqDelimiter(String delimiter)
 
 // ------------------------------------------------------------------------------------------------------------------------------------
 // printd queue elements for debugging purposes 
+// ------------------------------------------------------------------------------------------------------------------------------------
 void mqPrint()
 {
   Serial.printf("MQcount=%d MQnextAdd=%d\n", MQcount, MQnextAdd);
@@ -935,7 +976,7 @@ uint8_t cbScrollDataSource(uint8_t dev, MD_MAX72XX::transformType_t t)
                         case 159:           // ß
                             cc = 134;
                             break;
-                        deafault:
+                        default:
                             break;
                     }
                 }
@@ -1140,8 +1181,8 @@ void showClock(bool monthAsString)
     #define MAX_CHARS_CLOCK 13          // 'hh:mm dd.mm.' or 'hh:mm dd.mmm' + terminating \0
     static uint8_t lastTimeString[MAX_CHARS_CLOCK];                        
     static uint8_t lastMinute = 60;     // initialize for first time with not defined minute value
-    static char *Month[] = { "Jan", "Feb", "Mär", "Apr", "Mai", "Jun", 
-                             "Jul", "Aug", "Sep", "Okt", "Nov", "Dez" }; 
+    const char *Month[] = { "Jan", "Feb", "Mär", "Apr", "Mai", "Jun", 
+                            "Jul", "Aug", "Sep", "Okt", "Nov", "Dez" }; 
 
     if((currentTime->tm_min != lastMinute) || (display_mode_changed == true))
     {          
@@ -1184,6 +1225,8 @@ void showClock(bool monthAsString)
     }
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
+// displays a clock with selectable fonts: small (with time & date), bold (time only), normal (time only)
 // ------------------------------------------------------------------------------------------------------------------------------------
 void showFontClock(int font, bool showSeconds)
 {
@@ -1245,6 +1288,8 @@ void showFontClock(int font, bool showSeconds)
     }
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
+//  displays the time as percentage values: percentage of hours (24 hours = 100%) : percentage of minutes (60 minutes = 100%)
 // ------------------------------------------------------------------------------------------------------------------------------------
 void showPercentClock()
 {
@@ -1308,6 +1353,9 @@ void showPercentClock()
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------------
+//  displays the time as a bar, i.e. active LED's from left to right display position: 
+//      the elapsed time of the day determines the number of active LED's. 
+// ------------------------------------------------------------------------------------------------------------------------------------
 void showProgressClock(void)
 {
     static uint8_t lastMinute = 60;     // initialize for first time with not defined minute value
@@ -1342,7 +1390,7 @@ void showProgressClock(void)
 //    The diplay is organized in three sections Hour Minutes Seconds
 //    The time is represented by as h12 + h4 + h : m15 + m5 + m : s30 + s5 + s
 //    where  '[h|m|s]Number' represents the number of 
-
+// ------------------------------------------------------------------------------------------------------------------------------------
 void showSetTheoryClock(void)
 {
     static int last_second=60;
@@ -1354,8 +1402,6 @@ void showSetTheoryClock(void)
     int s=0, s5=0, s30=0;
     
     if((seconds != last_second) || (display_mode_changed == true)) {
-        char timeString[6];
-
         if(display_mode_changed) {
           display_mode_changed = false;
           clearDisplay();
@@ -1392,6 +1438,7 @@ void showSetTheoryClock(void)
 
 // ------------------------------------------------------------------------------------------------------------------------------------
 // display a square of sx *  sy led's at lower left position px,py on the matrtix display
+// ------------------------------------------------------------------------------------------------------------------------------------
 void displaySquare(uint8_t px, uint8_t py, uint8_t sx, uint8_t sy, bool on)
 {
   //Serial.printf("Square %d %d %d %d %s\n", px, py, sx, sy, (on?"on":"off"));    // debug output
@@ -1401,6 +1448,9 @@ void displaySquare(uint8_t px, uint8_t py, uint8_t sx, uint8_t sy, bool on)
       mx.setPoint(py-y, px-x, on); 
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
+// shows the current time as a math formula: hours = a op b op c    minutes = a op b op c
+//  op can be one of the 4 basic math operations + - * /. If addonly flag is set only additions are used.
 // ------------------------------------------------------------------------------------------------------------------------------------
 void showMathClock(bool addonly)
 {
@@ -1436,6 +1486,12 @@ void showMathClock(bool addonly)
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------------
+//  displays 'chars' characters of the buffer 'digits' on the matrix display. The display starts at position 'column'. 'fontIndex'
+//      can be used to determine how the values given in 'digits' are interpreted. For 'fontIndex'==0 the 'digits' are interpreted as 
+//      ASCII codes. For 'fontIndex'!=0 the digits are interpreted as decimal values and 'fontIndex' is added as an offset to the 
+//      'digit. Each digit in 'digits' is compared to the digit in 'lastDigits'. If the value is the identical the display of the digit 
+//      is skipped. On function return 'lastDigits' contains the current string shown on the display. 
+// ------------------------------------------------------------------------------------------------------------------------------------
 void displayString(int fontIndex, int chars, int column, uint8_t digits[], uint8_t lastDigits[])
 {
     #define MAX_DIGIT_COLS 64
@@ -1469,6 +1525,8 @@ void displayString(int fontIndex, int chars, int column, uint8_t digits[], uint8
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------------
+//  display the current time in 5 minute intervals as a natural language sentence on the display in scrolling mode
+// ------------------------------------------------------------------------------------------------------------------------------------
 void showTextClock(bool longFormat)
 {
     static uint8_t lastMinute = 60;     // initialize for first time with not defined minute value
@@ -1476,42 +1534,43 @@ void showTextClock(bool longFormat)
     static String HourName[] = { "Zwölf", "Eins", "Zwei", "Drei", "Vier", "Fünf", "Sechs", 
                                  "Sieben", "Acht", "Neun", "Zehn", "Elf" }; 
 
-    if((currentTime->tm_min != lastMinute) || (display_mode_changed == true) && validTime)
-    {          
-      int Minute=currentTime->tm_min;
-      int Hour=currentTime->tm_hour;
+    if(validTime) {
+        if(((currentTime->tm_min != lastMinute) || (display_mode_changed == true)) && validTime) {          
+            int Minute=currentTime->tm_min;
+            int Hour=currentTime->tm_hour;
 
-      lastMinute=Minute;
+            lastMinute=Minute;
 
-      if(display_mode_changed) {             
-        display_mode_changed = false;
-        clearDisplay();
-      }
+            if(display_mode_changed) {             
+                display_mode_changed = false;
+                clearDisplay();
+            }
 
-      if(longFormat) timeText="Es ist ";
-      if(Minute<3 || Minute>=58)
-        if(Hour==0)       timeText+=                    "Mitternacht";              // special case 'Mitternacht'
-        else if(Hour==1)  timeText+=                    "Ein Uhr";                  // special case 'Eins' Uhr
-        else              timeText+=                    HourName[Hour%12] + " Uhr"; // other full hour
-      else if(Minute<8)   timeText+="Fünf nach "      + HourName[Hour%12];
-      else if(Minute<13)  timeText+="Zehn nach "      + HourName[Hour%12];
-      else if(Minute<18)  timeText+="Viertel nach "   + HourName[Hour%12];
-      else if(Minute<23)  timeText+="Zwanzig nach "   + HourName[Hour%12];
-      else if(Minute<28)  timeText+="Fünf vor halb "  + HourName[Hour%12];
-      else if(Minute<33)  timeText+="Halb "           + HourName[++Hour%12];
-      else if(Minute<38)  timeText+="Fünf nach halb " + HourName[++Hour%12];
-      else if(Minute<43)  timeText+="Zwanzig vor "    + HourName[++Hour%12];
-      else if(Minute<48)  timeText+="Dreiviertel "    + HourName[++Hour%12];
-      else if(Minute<53)  timeText+="Zehn vor "       + HourName[++Hour%12];
-      else if(Minute<58)  timeText+="Fünf vor "       + HourName[++Hour%12];
-      else                timeText+="error";
+            if(longFormat) timeText="Es ist ";
+            if(Minute<3 || Minute>=58)
+                if(Hour==0)       timeText+=                    "Mitternacht";              // special case 'Mitternacht'
+                else if(Hour==1)  timeText+=                    "Ein Uhr";                  // special case 'Eins' Uhr
+                else              timeText+=                    HourName[Hour%12] + " Uhr"; // other full hour
+            else if(Minute<8)   timeText+="Fünf nach "      + HourName[Hour%12];
+            else if(Minute<13)  timeText+="Zehn nach "      + HourName[Hour%12];
+            else if(Minute<18)  timeText+="Viertel nach "   + HourName[Hour%12];
+            else if(Minute<23)  timeText+="Zwanzig nach "   + HourName[Hour%12];
+            else if(Minute<28)  timeText+="Fünf vor halb "  + HourName[Hour%12];
+            else if(Minute<33)  timeText+="Halb "           + HourName[++Hour%12];
+            else if(Minute<38)  timeText+="Fünf nach halb " + HourName[++Hour%12];
+            else if(Minute<43)  timeText+="Zwanzig vor "    + HourName[++Hour%12];
+            else if(Minute<48)  timeText+="Dreiviertel "    + HourName[++Hour%12];
+            else if(Minute<53)  timeText+="Zehn vor "       + HourName[++Hour%12];
+            else if(Minute<58)  timeText+="Fünf vor "       + HourName[++Hour%12];
+            else                timeText+="error";
 
-      mqAddAt(0, timeText); 
-      #ifdef DEBUG_CLOCK
-      Serial.printf("Time: %02d:%02d\n", Hour, Minute);
-      #endif
+            mqAddAt(0, timeText); 
+            #ifdef DEBUG_CLOCK
+            Serial.printf("Time: %02d:%02d\n", Hour, Minute);
+            #endif
+        }
     }
-    else if(!validTime) {
+    else  {
       timeText="no time information available";
 
       mqAddAt(0, timeText); 
@@ -1521,6 +1580,9 @@ void showTextClock(bool longFormat)
     }
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
+//  displays a text in scrolling mode
+// ------------------------------------------------------------------------------------------------------------------------------------
 void scrollText(uint8_t speed)
 {
     static uint32_t prevTime = 0;
@@ -1533,24 +1595,24 @@ void scrollText(uint8_t speed)
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------------
+//  implements an exclusive timer/stop watch mode. The timer can be set to different states
+// ------------------------------------------------------------------------------------------------------------------------------------
 void modeTimer(int secTimerTime, int font)
 {
     #define MAX_CHARS_TIMER 12                                    // 'xx 00:00:00' + terminating \0
     static uint8_t lastTimeString[MAX_CHARS_TIMER];               // buffer to store last printed time string
     static bool timerCountdown=0;                                 // true=countdown mode, false=stop watch mode
     uint8_t timeString[MAX_CHARS_TIMER];                          // buffer for time string to be printed on display
-    int seconds=currentTime->tm_sec;                              // seconds of current minutre
     uint32_t actMillis=millis();                                  // actual milliseconds (since 1.1.1970)
-    static uint32_t lastMillis=0;                       
-    uint32_t secDeltaTime=(actMillis-lastMillis)/1000;            
-    uint32_t lastRemainingSeconds=0;
+    static uint32_t lastMillis=0;                                 // milliseconds at last update                       
+    uint32_t secDeltaTime=(actMillis-lastMillis)/1000;            // seconds since last update
 
     switch(timerState) {
       case TS_SET: {
                 if(display_mode_changed) {
                   display_mode_changed = false;
                   memset(lastTimeString, ' ', MAX_CHARS_TIMER-1);
-                  lastTimeString[MAX_CHARS_TIMER]=0;
+                  lastTimeString[MAX_CHARS_TIMER-1]=0;
                   clearDisplay();
                 }
                 remainingSeconds=secTimerTime;                    // set timer time
@@ -1559,8 +1621,10 @@ void modeTimer(int secTimerTime, int font)
 
                 timerTimeString(remainingSeconds, timeString, MAX_CHARS_TIMER, timerCountdown, font);
                 displayString(0, MAX_CHARS_TIMER-1, 63, timeString, lastTimeString);
-                
-                Serial.printf("Timer TS_SET     remaining time: %d sec %s\n", remainingSeconds, (timerCountdown?"countdown":"stopwatch"));               
+
+                #ifdef DEBUG_TIMER
+                Serial.printf("Timer TS_SET     %d sec %s\n", remainingSeconds, (timerCountdown?"countdown mode":"stop watch mode"));               
+                #endif
                 timerState=TS_PAUSE;
             }
             break;
@@ -1570,7 +1634,9 @@ void modeTimer(int secTimerTime, int font)
                   if(timerCountdown) remainingSeconds-=secDeltaTime;                  // do count down (timer mode)
                   else               remainingSeconds+=secDeltaTime;                  // do count up (stop watch mode)
 
+                  #ifdef DEBUG_TIMER
                   Serial.printf("Timer TS_RUNNING %d sec %s\n", remainingSeconds, (timerCountdown?"remaining":"elapsed"));
+                  #endif
                   lastMillis=actMillis;                                               // save time of last update
 
 
@@ -1586,13 +1652,17 @@ void modeTimer(int secTimerTime, int font)
       case TS_PAUSE: {    // do nothing
                 if(secDeltaTime>=1) {
                   lastMillis=actMillis;
-                  Serial.printf("Timer TS_PAUSE   remaining time: %d sec\n", remainingSeconds);
+                  #ifdef DEBUG_TIMER
+                  Serial.printf("Timer TS_PAUSE   %d sec %s\n", remainingSeconds, (timerCountdown?"remaining":"elapsed"));
+                  #endif
                 } 
             }
             break;
 
       case TS_EXIT: {    // timer mode ended
+                  #ifdef DEBUG_TIMER
                   Serial.printf("Timer TS_EXIT\n");
+                  #endif
                   config.mode=lastMode;     
                   display_mode_changed = true;
                   clearDisplay();
@@ -1734,7 +1804,7 @@ bool readSecretsFromFile()
   int nofLines=0;
   int iLine=0;
 
-  Serial.printf("\nlooking for secrets...\n");
+  Serial.printf("\nLooking for secrets...\n");
   if(!SPIFFS.exists(SECRETS_FILENAME)) {
     Serial.printf("could not find secrets file %s\n", SECRETS_FILENAME);
     return false;
@@ -1785,12 +1855,14 @@ bool readSecretsFromFile()
   Serial.printf("%02d: %02d %02d (terminating secret)\n", iLine+1, Secrets[iLine].day, Secrets[iLine].month);
   #endif
 
-  Serial.printf("%04d secrets\n", nofLines);
+  Serial.printf("%04d secrets indexed.\n", nofLines);
 
   secretFile.close();
   return true;
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
+//  displays randomly secrets 
 // ------------------------------------------------------------------------------------------------------------------------------------
 void handleSecret(int minDistanceSeconds, int widthTimeframeSeconds)
 {
@@ -1880,7 +1952,9 @@ int readToEndOfLine(File in, char *buffer, int buf_size)
 /*************************************************   S E T U P   F U N C T I O N S   *************************************************/
 /*************************************************************************************************************************************/
 
+// ------------------------------------------------------------------------------------------------------------------------------------
 // Start the LED Matrix Display
+// ------------------------------------------------------------------------------------------------------------------------------------
 void startDisplay()
 {
     mx.begin();
@@ -1890,12 +1964,14 @@ void startDisplay()
     mx.control(MD_MAX72XX::INTENSITY, config.brightness);
 }
 
-// Start Station mode and tray to connect to given Access Point
-bool startSTA(void)
+// ------------------------------------------------------------------------------------------------------------------------------------
+// Start Station mode and try to connect to given Access Point
+// ------------------------------------------------------------------------------------------------------------------------------------
+bool startSTA(String ssid, String password)
 {
-    String msg="Connecting to " + String(config.ssid) + " ...";
+    String msg="Connecting to '" + ssid + "' ...";
     WiFi.mode(WIFI_STA);
-    WiFi.begin(config.ssid, config.password);
+    WiFi.begin(ssid, password);
     mqAddAt(0, msg);
     Serial.println(msg);
     
@@ -1913,11 +1989,9 @@ bool startSTA(void)
 
     if(millis() < prevMillis + CONNECT_AP_TIMEOUT)
     {
-        Serial.print("Connected to ");                 // Tell us what network we're connected to
-        Serial.println(WiFi.SSID());  
-        Serial.print("IP address:\t");
-        Serial.print(WiFi.localIP());
-        Serial.println("\n");
+        Serial.printf("Connected to '%s' with IP address '%s'\n", 
+                      WiFi.SSID().c_str(), WiFi.localIP().toString().c_str()
+                      );                 // Tell us what network we're connected to
         connectedAP = true;
         
         prevMillis=millis();
@@ -1931,18 +2005,22 @@ bool startSTA(void)
     else
     {
         connectedAP = false;
+        Serial.printf("Connection failed\n");
     }
 
     clearDisplay();
     return connectedAP;
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
 // Start Access Point mode
-bool startAP(void)
+// ------------------------------------------------------------------------------------------------------------------------------------
+void startAP(void)
 {
+    const char initMessage[] = "Bitte mit \"Die Zeile\" verbinden (Passwort \"DieZeile\") und IP 192.168.4.1 aufrufen.";
+
     WiFi.mode(WIFI_AP);
     WiFi.softAP(ssidAP, passwordAP);                    // Start the access point
-    //strcpy(currentMessage, initMessage);
     Serial.println();
     Serial.print("Access Point \"");
     Serial.print(ssidAP);
@@ -1959,7 +2037,9 @@ bool startAP(void)
     Serial.print("Station connected to AP \"Die Zeile\"\n\n");
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
 // Start MDNS to enable .local instead of IP address
+// ------------------------------------------------------------------------------------------------------------------------------------
 void startMDNS(void)
 {
     if(!MDNS.begin(mdnsName))                           // Start the mDNS responder
@@ -1975,7 +2055,9 @@ void startMDNS(void)
     }
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
 // Start the SPIFFS and list all contents
+// ------------------------------------------------------------------------------------------------------------------------------------
 void startSPIFFS()
 {
     SPIFFS.begin();                                   // Start the SPI Flash File System (SPIFFS)
@@ -1992,7 +2074,9 @@ void startSPIFFS()
     }
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
 // Start the OTA service
+// ------------------------------------------------------------------------------------------------------------------------------------
 void startOTA()
 {
     ArduinoOTA.setHostname(OTAName);
@@ -2023,7 +2107,9 @@ void startOTA()
     Serial.println("OTA ready\r\n");
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
 // Start a WebSocket server
+// ------------------------------------------------------------------------------------------------------------------------------------
 void startWebSocket()
 {
     webSocket.begin();
@@ -2031,7 +2117,9 @@ void startWebSocket()
     Serial.println("WebSocket server started.");
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
 // Start a HTTP server with a file read handler and an upload handler
+// ------------------------------------------------------------------------------------------------------------------------------------
 void startServer()
 {
     server.on("/set", handleSet);              // If a POST request is sent to the /set address
@@ -2050,7 +2138,9 @@ void startServer()
     Serial.println("HTTP server started.");
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
 // Start a NTP request and set time
+// ------------------------------------------------------------------------------------------------------------------------------------
 void startNTP()
 {
     if(connectedAP)
@@ -2060,8 +2150,6 @@ void startNTP()
         tzset();
     }
 }
-
-
 
 /*************************************************************************************************************************************/
 /***********************************************************   S E T U P   ***********************************************************/
@@ -2077,39 +2165,31 @@ void setup()
     Serial.printf("DieZeile Version %s\n", DieZeileVersion.c_str());
     
     eepromReadConfig();          // Read configuration from EEPROM
-    
     startDisplay();              // Start the LED Matrix Display
+    startSPIFFS();             // Start the SPIFFS and list all contents
 
-    startSPIFFS();               // Start the SPIFFS and list all contents
-
-    if(startSTA())               // Start WiFi Station mode and connect to AP with credentials from config struct
-    {
-        startMDNS();             // Start MDNS when connection succeeded
-        strcpy(currentMessage, config.message);
+    if(startSTA(String(config.ssid), String(config.password))) {    // Start WiFi Station mode and connect to AP with credentials from config struct
+        startMDNS();                                                // Start MDNS when connection succeeded
+        //strcpy(currentMessage, config.message);
     }
-    else
-    {
-        startAP();               // If connection failed, start your own access point
+    else if(startSTA(String(YOURWLANAP2), String(YOURPASSWORD2))) { // try alternative AP
+        startMDNS();                                                // Start MDNS when connection succeeded
+        //strcpy(currentMessage, config.message);
+    }
+    else {                                                          // connection attempts failed
+        startAP();                                                  // start your own access point
         config.mode  = MODE_SCROLLING_TEXT;
         config.speed = 20;
     }
 
     startOTA();                  // Start the OTA service
-  
     startWebSocket();            // Start a WebSocket server
-  
     startServer();               // Start a HTTP server with a file read handler and an upload handler
-
     startNTP();                  // Start a NTP request and set time
-
     startMathClock();            // Initialize Math Clock
-
     randomSeed(analogRead(0));
-
     readSecretsFromFile();
 }
-
-
 
 /*************************************************************************************************************************************/
 /************************************************************   L O O P   ************************************************************/
@@ -2123,13 +2203,13 @@ void loop()
     ArduinoOTA.handle();          // Listen for OTA events
     updateTime();                 // Update currentTime variable
 
-    if(config.mode==MODE_TIMER) {
-      modeTimer(config.timerTime,config.clockFont);
-      return;
+    if(config.mode==MODE_TIMER) {                                     // TIMER mode active?
+      modeTimer(config.timerTime,config.clockFont);                   // handle timer mode
+      return;                                                         // TIMER MODE is exclusive, do nothing else and return 
     }
       
-    if(config.secretWindow!=0)
-      handleSecret(config.secretPeriod, config.secretWindow);        // look up for a secret to display
+    if(config.secretWindow!=0)                                        // secrets enabled?
+      handleSecret(config.secretPeriod, config.secretWindow);         // look up for a secret to display
     
     switch(config.mode)
     {
@@ -2158,10 +2238,10 @@ void loop()
           break;
     }
 
-    displayModeBlink(2000, 5000, config.displayMode);
+    displayModeBlink(config.displayPeriod, 5000, config.displayMode);   // handle display modes 
     
-    switch(config.mode)
-    {
+    switch(config.mode)                                               // do scrolling if required     
+    { 
       case MODE_TEXT_CLOCK:
       case MODE_SCROLLING_TEXT:
           scrollText(config.speed);
