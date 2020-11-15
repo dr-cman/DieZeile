@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <title>Timer</title>
+    <link href='main.css' rel='stylesheet' type='text/css'>
+    <link rel="icon" type="image/png" sizes="144x144"  href="/favicon-144x144.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon.ico">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#00878f">
+    <meta charset="utf-8"/>
+    <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' name='viewport'>
+	<script src="timer.js" type="text/javascript"></script>
+</head>
+<body>
+	<center>
+        <header>
+            <h1>Die Zeile - Timer</h1>
+        </header>
+		<table>
+			<tr>
+				<td>
+					<table>
+						<tr>
+							<td class="timerDigit">Stunden<br><div  class="timerDigit" id="hourValueID">00</div>
+							<td class="timerDigit">Minuten<br><div  class="timerDigit" id="minValueID" >00</div>
+							<td class="timerDigit">Sekunden<br><div class="timerDigit" id="secValueID" >00</div>
+						</tr>
+						<tr valign="bottom">
+							<td class="timerSetting">
+								<button class="timerSetting" onclick="timerIncDec('hourValueID',1,99)">+</button>
+							</td>
+							<td class="timerSetting">
+								<button class="timerSetting" onclick="timerIncDec('minValueID',1,59)">+</button>
+							</td>
+							<td class="timerSetting">
+								<button class="timerSetting" onclick="timerIncDec('secValueID',1,59)">+</button>
+							</td>
+						</tr>
+						<tr valign=top">
+							<td class="timerSetting">
+								<button class="timerSetting" onclick="timerIncDec('hourValueID',-1,99)">-</button>
+							</td>
+							<td class="timerSetting">
+								<button class="timerSetting" onclick="timerIncDec('minValueID',-1,59)">-</button>
+							</td>
+							<td class="timerSetting">
+								<button class="timerSetting" onclick="timerIncDec('secValueID',-1,59)">-</button>
+							</td>
+						</tr>
+					</table>
+				</td>
+				<td class="timerAction" valign="bottom">
+					<button class="timerAction" id="timerStartStopID" onclick="timerStartPause()">START</button><br>
+					<button class="timerAction" onclick="timerReset()">RESET</button><br>
+					<button class="timerAction" onclick="timerClear()">CLEAR</button><br>
+					<button class="timerAction" onclick="timerExit()">Exit</button>
+				</td>
+			</tr>
+		</table>
+		<br>
+        <h4 id="statusID">SSID: Die Zeile <br> IP: 192.168.4.1</h2>
+		<div class="version" id="versionID">Version unknown<div>
+	</center>
+</body>
+</html>

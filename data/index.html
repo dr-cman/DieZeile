@@ -13,112 +13,179 @@
 </head>
 
 <body>
-
+		<center>
         <header>
             <h1>Die Zeile</h1>
         </header>
 		<div>
-            <h3>Helligkeit</h3>
-            <td>
-                <input id="brightnessID" style="width: 400px" type="range" min="1" max="15" step="1" oninput="sendBrightness()" value="1">
-            </td>
+            <h3>Anzeige</h3>
+			<table>
+				<tr>
+                    <td style="text-align: right">Helligkeit</td>
+					<td>
+						<input id="brightnessID" type="range" min="0" max="15" step="1" oninput="sendBrightness()" value="1">
+					</td>
+				</tr>
+				<tr>
+                    <td style="text-align: right">Modus</td>
+					<td>
+					<label class="radio-inline">
+						<input type="radio" id="modeDisplayNormalID" name="display" onchange="sendDisplayMode(0)" checked>Normal
+					</label>                    
+                    <label class="radio-inline">
+                        <input type="radio" id="modeDisplayBlinkID" name="display" onchange="sendDisplayMode(1)">Blinken
+                    </label>                    
+                    <label class="radio-inline">
+                        <input type="radio" id="modeDisplayGlowID" name="display" onchange="sendDisplayMode(2)">Glühen
+                    </label>                    
+					<br />
+                    <label class="radio-inline">
+                        <input type="radio" id="modeDisplayUpID" name="display" onchange="sendDisplayMode(3)">RampUp
+					</label>                    
+                    <label class="radio-inline">
+                        <input type="radio" id="modeDisplayDownID" name="display" onchange="sendDisplayMode(4)">RampDown
+					</label>                    
+					</td>
+				</tr>
+				<tr>
+                    <td style="text-align: right">Intervall</td>
+					<td>
+						<input id="periodID" type="range" min="500" max="50000" step="250" oninput="sendDisplayPeriod()" value="500">
+					</td>
+				</tr>
+			</table>
         </div>
-		<hr>
         <div>
             <h3>Betriebsart</h3>
 			<table>
 				<tr>
-				<td style="text-align: right"><b>Uhr</b></td>
+				<td style="text-align: left"><b>Uhren</b></td>
 				<td>
 					<label class="radio-inline">
-						<input type="radio" id="modeClockID" name="mode" onchange="sendModeClock()" checked>Uhr
+						<input type="radio" id="modeClockID" name="mode" onchange="sendOperationMode(1)" checked>Classic
 					</label>                    
                     <label class="radio-inline">
-                        <input type="radio" id="modeMathID" name="mode" onchange="sendModeMath()">Mathe
+                        <input type="radio" id="modeMathID" name="mode" onchange="sendOperationMode(2)">Mathe
                     </label>                    
                     <label class="radio-inline">
-                        <input type="radio" id="modeAddOnlyID" name="mode" onchange="sendModeAddOnly()">Summe
-                    </label>        
+                        <input type="radio" id="modeProgressID" name="mode" onchange="sendOperationMode(4)">Balken
+                    </label>                    
 					<br />
                     <label class="radio-inline">
-                        <input type="radio" id="modeProgressID" name="mode" onchange="sendModeProgress()">Balken
-                    </label>                    
-                    <label class="radio-inline">
-                        <input type="radio" id="modeSetTheoryClockID" name="mode" onchange="sendModeSetTheoryClock()">Mengen
+                        <input type="radio" id="modeSetTheoryClockID" name="mode" onchange="sendOperationMode(7)">Mengen
 					</label>                    
                     <label class="radio-inline">
-                        <input type="radio" id="modeFontClockID" name="mode" onchange="sendModeFontClock()">Font
+                        <input type="radio" id="modeFontClockID" name="mode" onchange="sendOperationMode(8)">Font
+					</label>                    
+                    <label class="radio-inline">
+                        <input type="radio" id="modePercentClockID" name="mode" onchange="sendOperationMode(9)">Prozent
 					</label>                    
 				<td>
 				</tr>
 				<tr>
-				<td style="text-align: right"><b>Laufschrift</b></td>
+				<td style="text-align: left"><b>Laufschriften</b></td>
 				<td>
                     <label class="radio-inline">
-                        <input type="radio" id="modeTextID" name="mode" onchange="sendModeText()">Text
+                        <input type="radio" id="modeTextID" name="mode" onchange="sendOperationMode(5)">Text
 					</label>                    
-				<br>
+
                     <label class="radio-inline">
-                        <input type="radio" id="modeTextClockID" name="mode" onchange="sendModeTextClock()">Uhr
+                        <input type="radio" id="modeTextClockID" name="mode" onchange="sendOperationMode(6)">Uhr
 					</label>                    
 					<p style="margin: 5px">
 				<td>
 				</tr>
+				<tr>
+					<td style="text-align: left"><b>Timer</b></td>
+					<td>
+						<button type="button" id="modeTimerID" onclick="window.location.href = 'timer.html';">Timer/Stopuhr</button>
+					<td>
+				</tr>
 			</table>
 		</div>
-		<hr>
         <div>
             <h3>Parameter</h3>
             <table>
                 <tr>
-                    <td style="text-align: right">Secret period [sec]: </td>
-                    <td>
-                        <input id="secretPeriodID" type="range" min="30" max="360" step="30" oninput="sendSectretPeriodInSec()" value="30">
-                    </td>
-                </tr>
-                <tr>
-                    <td style="text-align: right">Secret window [sec]: </td>
-                    <td>
-                        <input id="secretWindowID" type="range" min="0" max="3600" step="60" oninput="sendSectretWindowInSec()" value="60">
-                    </td>
-                </tr>
-                <tr>
-                    <td style="text-align: right">Font Uhr:</td>
+                    <td style="text-align: left"><b>Uhr:</b></td>
+				</tr>
+				<tr>
+                    <td style="text-align: right">Classic</td>
 					<td>
                     <label class="radio-inline">
-                        <input type="radio" id="fontClassicID" name="font" onchange="setFontClassic()">classic
+                        <input type="checkbox" id="fontClockMonatID" name="monat" onchange="setClockMonat()">Monatsname
+					</label>                    
+                </tr>
+				<tr>
+                    <td style="text-align: right">Mathe</td>
+					<td>
+                    <label class="radio-inline">
+                        <input type="radio" id="setMathModeAllID" name="math" onchange="setClockMathMode(0)">plus/minus/mal/geteilt
 					</label>                    
                     <label class="radio-inline">
-                        <input type="radio" id="fontSmallID" name="font" onchange="setFontSmall()">small
+                        <input type="radio" id="setMathModeAddID" name="math" onchange="setClockMathMode(1)">plus
+					</label>                    
+                </tr>
+				<tr>
+                    <td style="text-align: right">Font</td>
+					<td>
+                    <label class="radio-inline">
+                        <input type="radio" id="fontClassicID" name="font" onchange="setClockFont(2)">normal
 					</label>                    
                     <label class="radio-inline">
-                        <input type="radio" id="fontBoldID" name="font" onchange="setFontBold()">bold
+                        <input type="radio" id="fontSmallID" name="font" onchange="setClockFont(0)">eng
+					</label>                    
+                    <label class="radio-inline">
+                        <input type="radio" id="fontBoldID" name="font" onchange="setClockFont(1)">breit
 					</label>                    
 					</td>
                 </tr>
                 <tr>
-                    <td style="text-align: right">Laufschrift Text: </td>
+                    <td style="text-align: left"><b>Laufschrift:</b></td>
+                </tr>
+                <tr>
+                    <td style="text-align: right">Text</td>
 					<td>
 						<input id="textID" type="text" name="scrolltext" maxlength="80" onfocusout="sendText()">
 					</td>
                 </tr>
                 <tr>
-                    <td style="text-align: right">Laufschrift Tempo: </td>
+                    <td style="text-align: right">Position</td>
                     <td>
-                        <input id="speedID" type="range" min="5" max="42" step="1" oninput="sendSpeed()" value="30">
+						<input id="positionID" type="number" min="0" max="2" step="1" value="0">
+                        <button id="mqAddAtID" type="button" onclick="sendMQAddAt()">Setzen</button>
+                        <button id="mqDeleteAtID" type="button" onclick="sendMQDeleteAt()">Löschen</button>
                     </td>
                 </tr>
                 <tr>
-                    <td style="text-align: right">Aktion: </td>
+                    <td style="text-align: right">Trenntext</td>
+					<td>
+						<input id="textMQSID" type="text" name="scrolltext" maxlength="80" onfocusout="sendMQD()">
+					</td>
+                </tr>
+                <tr>
+                    <td style="text-align: right">Tempo </td>
                     <td>
-                        <button id="addID" type="button" oninput="sendMQAdd()">Setzen</button>
-                        <button id="addID" type="button" oninput="sendMQDelete()">Löschen</button>
-						<input id="positionID" type="number" min="0" max="2" step="1" oninput="sendMQNumber()" value="0">
+                        <input id="speedID" type="range" style="width: 250px" in="5" max="42" step="1" oninput="sendSpeed()" value="30">
+                    </td>
+                </tr>
+                <tr>
+                    <td style="text-align: left"><b>Secrets:</b></td>
+                </tr>
+                <tr>
+                    <td style="text-align: right" id="secretPeriodValueID">Period [sec]</td>
+                    <td>
+                        <input id="secretPeriodID" type="range" min="30" max="360" step="30" oninput="sendSecretPeriodInSec()" value="30">
+                    </td>
+                </tr>
+                <tr>
+                    <td style="text-align: right" id="secretWindowValueID">Window [sec]</td>
+                    <td>
+                        <input id="secretWindowID" type="range" min="0" max="3600" step="60" oninput="sendSecretWindowInSec()" value="60">
                     </td>
                 </tr>
             </table>
         </div>
-		<hr>
         <div>
             <h3>WiFi Zugang</h3>
             <table>
@@ -147,6 +214,7 @@
             </table>
         </div>
         <h4 id="statusID">SSID: Die Zeile <br> IP: 192.168.4.1</h2>
-
+		<div class="version" id="versionID">Version unknown<div>
+		</center>
 </body>
 </html>

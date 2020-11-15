@@ -1,3 +1,20 @@
+#define FONT_SMALL_4x7         179   
+#define FONT_TALL_4x8        159   
+#define FONT_BOLD_5x8         148   
+#define FONT_NORMAL_5x7       48           // standard ASCII offset    
+
+#define CHAR_TIMER_LOGO       176
+#define CHAR_HOURGLASS        174
+#define CHAR_SPACE_4COLS      175
+#define CHAR_SPACE_10COLS     178
+#define CHAR_SPACE_22COLS     177
+#define CHAR_DOT_1x8          171
+#define CHAR_DOT_1x7          172
+#define CHAR_ARROW_UP_5x7     24
+#define CHAR_ARROW_DOWN_5x7   25
+#define CHAR_COLON_2X8        147
+#define CHAR_COLON_3X8        158
+
 const uint8_t charset[] PROGMEM = {
   0,                                                        // 0 - 'Empty Cell'
   5, 0x3e, 0x5b, 0x4f, 0x5b, 0x3e,                          // 1 - 'Sad Smiley'
@@ -162,7 +179,7 @@ const uint8_t charset[] PROGMEM = {
   5, B11011111, B11011111, B11011011, B11111111, B11111111, // 157 - 9 (Bold)
   3, B11101110, B11101110, B11101110,                       // 158 - : (Bold)
   
-  // clock digits in small serif font (3 pixels width)
+  // clock digits in small serif font (3 pixels width, 8 pixels high)
   3, B11111111, B10000001, B11111111,                       // 159 - 0 (Small)
   3, B00000000, B11111111, B00000000,                       // 160 - 1 (Small)
   3, B11111001, B10001001, B11001111,                       // 161 - 2 (Small)
@@ -176,4 +193,47 @@ const uint8_t charset[] PROGMEM = {
   1, B00100100,                                             // 169 - : (Small)
   3, B00000000, B00000000, B00000000,                       // 170 - space (Small)
   1, B10000000,                                             // 171 - . (Small)
+  1, B01000000,                                             // 172 - . (Small) alternative
+
+  // some special characters
+  6, B00000000, B00000000, B00110110, B00110110, B00000000, B00000000,  // 173 - : alternative
+  5, B11000011, B11100101, B11011101, B11100101, B11000011,             // 174 - hourglas symbol
+  4, B00000000, B00000000, B00000000, B00000000,                        // 175 - space with 4 columns
+
+  // timer logo                                             // 176 TiMER
+ 19, B00000001, B00011111, B00000001,                       // T
+     B00000000,                                             //
+     B00011101,                                             // i          
+     B00000000,                                             //
+     B00011111, B00000010, B00000100, B00000010, B00011111, // M
+     B00000000,                                             // 
+     B00011111, B00010101, B00010001,                       // E
+     B00000000,                                             //
+     B00011111, B00000101, B00011010,                       // R
+
+  // some special spaces
+ 22, B00000000, B00000000, B00000000, B00000000, B00000000, // 177 - space 22 cols wide
+     B00000000, B00000000, B00000000, B00000000, B00000000, 
+     B00000000, B00000000, B00000000, B00000000, B00000000, 
+     B00000000, B00000000, B00000000, B00000000, B00000000, 
+     B00000000, B00000000,  
+ 10, B00000000, B00000000, B00000000, B00000000, B00000000, // 178 - space 10 cols wide
+     B00000000, B00000000, B00000000, B00000000, B00000000, 
+
+  // clock digits in small font (3 pixels width, 7 pixels high)
+  3, B01111111, B01000001, B01111111,                       // 179 - 0 (Small)
+  3, B00000000, B01111111, B00000000,                       // 180 - 1 (Small)
+  3, B01111001, B01001001, B01001111,                       // 181 - 2 (Small)
+  3, B01000001, B01001001, B01111111,                       // 182 - 3 (Small)
+  3, B00001111, B00001000, B01111111,                       // 183 - 4 (Small)
+  3, B01001111, B01001001, B01111001,                       // 184 - 5 (Small)
+  3, B01111111, B01001001, B01111001,                       // 185 - 6 (Small)
+  3, B00000001, B00000001, B01111111,                       // 186 - 7 (Small)
+  3, B01111111, B01001001, B01111111,                       // 187 - 8 (Small)
+  3, B01001111, B01001001, B01111111,                       // 188 - 9 (Small)
+  1, B00100100,                                             // 189 - : (Small)
+  3, B00000000, B00000000, B00000000,                       // 180 - space (Small)
+  1, B01000000,                                             // 181 - . (Small)
+  1, B01000000,                                             // 182 - . (Small) alternative
+
 };

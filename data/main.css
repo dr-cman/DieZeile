@@ -13,6 +13,38 @@ h1 {
     box-shadow: 1px 1px 5px #555555;
 }
 
+h1.timerDigit {
+    background-color: #D0D0D0;
+    color: white;
+	font-family: Courier;
+	font-size: 40px;
+    padding: 0px;
+    margin: 0px;
+	box-shadow: 0px 0px 0px #555555;
+}
+
+div.timerDigit {
+    background-color: #D0D0D0;
+    color: green;
+	font-family: Courier;
+	font-size: 40px;
+	font-weight: bold;
+    padding: 0px;
+    margin: 0px;
+	box-shadow: 0px 0px 0px #555555;
+}
+
+div.version {
+    background-color: #FFFFFF;
+    color: #202020;
+	font-family: Courier;
+	font-size: 12px;
+    padding: 2px;
+    margin: 5px;
+	box-shadow: 0px 0px 0px #555555;
+}
+
+
 h3 {
     padding: 7px;
     margin: 0px;
@@ -22,6 +54,67 @@ h4 {
     background-color: #CCCCCC;
     color: white;
     padding: 10px;
+    margin: 0px;
+    box-shadow: 1px 1px 5px #555555;
+}
+
+h4.noShadow {
+    box-shadow: 0px 0px 0px #555555;
+}
+
+td.timerDigit {
+	text-align: center; 
+	height: 80px;
+	width: 80px;
+}
+
+td.timerSetting {
+	text-align: center; 
+	height: 60px;
+	width: 80px;
+}
+
+td.timerAction {
+	text-align: center; 
+	height: 60px;
+	width: 80px;
+}
+
+input.timerDigit {
+	text-align: center; 
+	font-size: 40px;
+	height: 80px;
+	width: 80px;
+}
+
+button.timerSetting {
+    background-color: #B0B0B0;
+    color: white;
+	text-align: center;
+	font-size: 40px;
+    padding: 5px;
+    margin: 0px;
+	width:80px;
+	height: 60px;
+    box-shadow: 1px 1px 5px #555555;
+}
+
+button.timerAction {
+    background-color: #909090;
+    color: white;
+	text-align: center;
+	font-size: 20px;
+    padding: 5px;
+    margin: 2px;
+	width:120px;
+	height: 42px;
+    box-shadow: 1px 1px 5px #555555;
+}
+
+ts {
+    background-color: #B0B0B0;
+    color: white;
+    padding: 0px;
     margin: 0px;
     box-shadow: 1px 1px 5px #555555;
 }

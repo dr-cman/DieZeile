@@ -12,7 +12,7 @@
 //        cleaning teh old and displaying the new text)
 //    - message queue (MQ) mechanism added
 //        a buffer (array of message texts) with MAX_NOF_MQMSG entries is used to store messages that 
-//        subsequently displayed. Functions for message queue management:
+//        subsequently displayed. Functions for message queue management
 //          mqInit()    initialization of MQ
 //          mqClear()   deletion of all messe queue entries
 //          mqAdd()     adds a text to the message queue (ring buffer mode)
@@ -29,6 +29,27 @@
 //    - secrets function modified
 //        secrets are displayed at random time intervals. Lower and upper limit of the time interval can be
 //        specified. 
+//    - secrets wildcards and multiple secrets
+//        a 0 as day and/or month is interpreted as a wildcard. As a consequence multiple secrets (limitetd to 10)
+//        can match a specific day/month. handleSecrets() collects now all matching secrets for a day/month and
+//        randomly selects one for display each time the function is called
+//    - font clock added
+//        display the time with different fonts: small (time & date), bold (time), classic (time)
+//    - index.html WebSockets.js
+//        new features added to the web interface and websocket handler
+//    - percent clock added
+//        display the time as percentages of hours of the day and miniute of the hour
+//    - texts of secrets are loaded dynamically without storing 
+//        this enables large secret files (lots of messages) since the text strings are not loaded into the 
+//        memory
+//    - timer mode added
+//        count down of a user configuragbe time span. After the time is elapsed the display swiches back to 
+//        the mode before the time was started. No secrets or other messages are shown during active time 
+//        mode
+//    - additional 'blink' display modes added
+//
+//  ToDo:
+//    - replacement of deprecated SPIFFS functions (to be replaced by FS functions)
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #include <ArduinoOTA.h>
@@ -48,6 +69,7 @@
 #define DEBUG_MQ
 //#define DEBUG_CLOCK
 #define DEBUG_SECRETS
+//#define DEBUG_SECRETS_MESSAGES
 
 #define DATA_PIN                           13 // DIN Scroll Matrix
 #define LOAD_PIN                           15 // CS  Scroll Matrix
@@ -72,25 +94,26 @@
 #define MODE_SCROLLING_TEXT                 5 // Scrolling Text mode
 #define MODE_TEXT_CLOCK                     6 // Text Clock mode
 #define MODE_SET_THEORY_CLOCK               7 // Text Clock mode
-#define MODE_FONT_CLOCK                     8 // Clock mode with different fonts (small, bold)
+#define MODE_FONT_CLOCK                     8 // Clock mode with different fonts (small, bold, classic)
+#define MODE_PERCENT_CLOCK                  9 // Clock mode with time displayed in percent values
+#define MODE_TIMER                         10 // timer mode
 
 #define SCROLL_MIN_SPEED                    5 // Minimum speed for scrolling text
 #define SCROLL_MAX_SPEED                   42 // Maximum speed for scrolling text
 
-#define SECRET_SHOW_PROBABILITY           42 // Inverse of probability of showing the secret if there is on for the current minute
-
-
+#define SECRETS_FILENAME                   "/secrets.txt"
 /*************************************************************************************************************************************/
 /************************************************   G L O B A L   V A R I A B L E S   ************************************************/
 /*************************************************************************************************************************************/
+String DieZeileVersion="0.9 " + String(__DATE__) + " " + String(__TIME__);
 
-const char *ssidAP       = "Die Zeile";  // The name of the Wi-Fi network that will be created
-const char *passwordAP   = "DieZeile";   // The password required to connect to it, leave blank for an open network
+const char *ssidAP       = "Die Zeile";         // The name of the Wi-Fi network that will be created
+const char *passwordAP   = "DieZeile";          // The password required to connect to it, leave blank for an open network
 
-const char *OTAName      = "DieZeile";   // A name and a password for the OTA service
+const char *OTAName      = "DieZeile";          // A name and a password for the OTA service
 const char *OTAPassword  = "hrlbrmpf"; 
 
-const char* mdnsName     = "DieZeile";   // Domain name for the mDNS responder
+const char* mdnsName     = "DieZeile";          // Domain name for the mDNS responder
 
 char initMessage[] = "Bitte mit \"Die Zeile\" verbinden (Passwort \"DieZeile\") und IP 192.168.4.1 aufrufen.";
 char currentMessage[MAX_NOF_CHARS_OF_MSG];
@@ -102,15 +125,15 @@ int  MQcount=0;                                 // number of messages in message
 int  MQnextAdd=0;                               // next buffer position to be filled with new message
 int  MQnextDisplay=0;
 
+#ifdef BUFFER_RECORDING
 bool recordDisplayBuffer=false;
 uint8_t displayBuffer[64];
+#endif
 
-
-
-int  lastMode=0;                         // 
+int  lastMode=0;                         // Remember last mode if secret is displayed
 bool display_mode_changed  = false;      // Remember if display mode changed
 bool connectedAP           = false;      // Remember if connected to an external AP
-bool validTime             = false;
+bool validTime             = false;      // true, when valid time information is available  
 unsigned long prevMillis   = millis();   // Initialize current millisecond
 struct tm *currentTime;                  // Store current time in this variable
 
@@ -120,6 +143,11 @@ ESP8266WebServer server(80);             // Create a web server on port 80
 WebSocketsServer webSocket(81);          // Create a websocket server on port 81
 
 File fsUploadFile;                       // A File variable to temporarily store the received file
+
+enum { DM_NORMAL=0, DM_BLINK=1, DM_GLOW=2, DM_RAMPUP=3, DM_RAMPDOWN=4 };
+enum { TS_SET, TS_RUNNING, TS_PAUSE, TS_EXIT } timerState = TS_SET;
+int remainingSeconds=0;
+
 
 struct {                                 // config struct storing all relevant data in EEPROM
     char MAC[18];                        // 'xx.xx.xx.xx.xx.xx'
@@ -132,15 +160,21 @@ struct {                                 // config struct storing all relevant d
     int secretPeriod;
     int secretWindow;
     int clockFont;
+    int displayMode;
+    int timerTime;
+    int clockMode;
+    int mathMode;
+    int displayPeriod;
+    int displayDuration;
+    int timerState;
 } config;
 
-typedef struct t_Secret {
+typedef struct t_Secret {               // Secret struct to store secret information read from file
   int day;
   int month;
-  char *secret;
+  size_t position;
 } Secret;
-Secret *Secrets=NULL;
-
+Secret *Secrets=NULL;                   // dynamically loaded secrets (from SPIFFS file secrets.txt)
 
 /*************************************************************************************************************************************/
 /*************************************************   H E L P E R   F U N C T I O N S   ***********************************************/
@@ -193,17 +227,29 @@ void eepromReadConfig(void)
         strcpy(config.message, "Die Zeile !");
         strcpy(config.ssid, YOURWLANAP);
         strcpy(config.password, YOURPASSWORD);
-        config.secretPeriod = 30;   // seconds
-        config.secretWindow = 60;   // seconds
-        config.clockFont = 0;       // small
+        config.secretPeriod = 30;                   // minimum seconds before next secret is fetched
+        config.secretWindow = 0;                    // time window for display of secret after secretPeriod
+        config.clockFont = 0;                       // 0=small 1=bold 2=classic
+        config.displayMode = DM_NORMAL;             // sub mode for display settings
+        config.timerTime = 0;
+        config.clockMode = 1;                       // 0= month as 'xx.xx.' 1=month as string
+        config.mathMode = 0;                        // 0= '+ - * /'         1='+'
+        config.displayPeriod = 1000;
+        config.displayDuration = 3000;
+        config.timerState = TS_SET;
         eepromWriteConfig();
     }
     else
     {
         Serial.printf("Reading configuration from eeprom\n");
-        config.secretPeriod = 30;
-        config.secretWindow = 60;
-        config.clockFont = 0;
+        config.clockFont = 0;                       // 0=small 1=bold 2=classic
+        config.displayMode = DM_NORMAL;             // sub mode for display settings
+        config.timerTime = 0;
+        config.clockMode = 1;                       // 0= month as 'xx.xx.' 1=month as string
+        config.mathMode = 0;                        // 0= '+ - * /'         1='+'
+        config.displayPeriod = 1000;
+        config.displayDuration = 3000;
+        config.timerState = TS_SET;
         printConfiguration();
     }
 
@@ -224,15 +270,20 @@ void eepromWriteConfig(void)
 void printConfiguration()
 {
     Serial.printf("Configuration:\n");
-    Serial.printf("MAC:        %s\n", config.MAC);
-    Serial.printf("brightness: %d\n", config.brightness);
-    Serial.printf("mode:       %d\n", config.mode);
-    Serial.printf("speed:      %d\n", config.speed);
-    Serial.printf("secret:     period=%d sec window=%d sec\n", config.secretPeriod, config.secretWindow);
-    Serial.printf("font:       %d (%s)\n", config.clockFont, (config.clockFont==2?"classic":(config.clockFont)?"bold":"small"));
-    Serial.printf("message:    %s\n", config.message);
-    Serial.printf("ssid:       %s\n", config.ssid);
-    Serial.printf("password:   %s\n\n", config.password);        
+    Serial.printf("MAC:         %s\n", config.MAC);
+    Serial.printf("brightness:  %d\n", config.brightness);
+    Serial.printf("mode:        %d\n", config.mode);
+    Serial.printf("speed:       %d\n", config.speed);
+    Serial.printf("secret:      period=%d sec window=%d sec\n", config.secretPeriod, config.secretWindow);
+    Serial.printf("clock font:  %d (%s)\n", config.clockFont, (config.clockFont==2?"classic":(config.clockFont)?"bold":"small"));
+    Serial.printf("clock mode:  %d\n", config.clockMode);
+    Serial.printf("math mode:   %d\n", config.mathMode);
+    Serial.printf("displaymode: %d\n", config.displayMode);
+    Serial.printf("timerTime:   %d\n", config.timerTime);
+    Serial.printf("timerState:  %d\n", config.timerState);
+    Serial.printf("message:     %s\n", config.message);
+    Serial.printf("ssid:        %s\n", config.ssid);
+    Serial.printf("password:    %s\n\n", config.password);        
 }
 
 /*************************************************************************************************************************************/
@@ -282,39 +333,26 @@ void handleSet()
     for(int i=0; i<argcount; i++) 
     {
         String argName=server.argName(i);
-        if(argName == "B" || argName == "brightness" )
-            setBrightness((int)(server.arg(argName.c_str())).toInt());
-
-        else if(argName == "S" || argName == "speed" )
-            setSpeed((int)(server.arg(argName.c_str())).toInt());
-
-        else if(argName == "M" || argName == "mode" )
-            setMode((int)(server.arg(argName.c_str())).toInt());
-
-        else if(argName == "f" )
-            setClockFont((int)(server.arg(argName.c_str())).toInt());
-
-        else if(argName == "T" || argName == "text" )
-            setText(server.arg(argName.c_str()));
-
-        else if(argName == "X" || argName == "save" )
-            setSaveConfig();
-
-        else if(argName == "A" || argName == "mqAdd" )
-            mqAdd(server.arg(argName.c_str()));
-
-        else if(argName == "a" || argName == "mqSetDelimiter" )
-            mqDelimiter(server.arg(argName.c_str()));
-
-        else if(argName == "D" || argName == "mqDelete" )
-            mqDelete((int)(server.arg(argName.c_str())).toInt());
-
-        else if(argName == "sP" )
-            setSecretPeriod((int)(server.arg(argName.c_str())).toInt());
-
-        else if(argName == "sW" )
-            setSecretWindow((int)(server.arg(argName.c_str())).toInt());
-
+        int argInt=(int)(server.arg(argName.c_str())).toInt();
+        
+        if     (argName=="B" || argName=="brightness")  setBrightness(argInt);
+        else if(argName=="S" || argName=="speed")       setSpeed(argInt);
+        else if(argName=="M" || argName=="mode")        setMode(argInt);
+        else if(argName=="m" || argName=="dmode")       setDisplayMode(argInt);
+        else if(argName=="cf")                          setClockFont(argInt);
+        else if(argName=="cm")                          setClockMode(argInt);
+        else if(argName=="cM")                          setMathMode(argInt);
+        else if(argName=="dm")                          setDisplayMode(argInt);
+        else if(argName=="dp")                          setDisplayPeriod(argInt);
+        else if(argName=="tt")                          setTimerTime(argInt);
+        else if(argName=="ts")                          setTimerState(argInt);
+        else if(argName=="T" || argName=="text")        setText(server.arg(argName.c_str()));
+        else if(argName=="X" || argName=="save")        setSaveConfig();
+        else if(argName=="A" || argName=="mqadd")       mqAdd(server.arg(argName.c_str()));
+        else if(argName=="a" || argName=="mqdelimiter") mqDelimiter(server.arg(argName.c_str()));
+        else if(argName=="D" || argName=="mqdelete")    mqDelete(argInt);
+        else if(argName =="sP")                         setSecretPeriod(argInt);
+        else if(argName =="sW")                         setSecretWindow(argInt);
         else if(argName.charAt(0) == 'A')
         {
             String argIndex=argName;
@@ -329,12 +367,20 @@ void handleSet()
     String settings =  "B=" + String(config.brightness) +
                       " M=" + String(config.mode) + 
                       " S=" + String(config.speed) +
+                      " f=" + String(config.clockFont) +
+                      " sP="+ String(config.secretPeriod) +
+                      " sW="+ String(config.secretWindow) +
                       " Message=" + String(config.message) + "\n";
     for(int i=0; i<MAX_NOF_MQMSG; i++)
         settings += "MQ[" + String(i) + "]='" + String(MQ[i]) + "'\n";
     settings += "MQD  ='" + String(MQD) + "'\n";
                      
     server.send(200, "text/plain", settings.c_str());
+}
+
+void handleTimer()
+{
+  
 }
 
 // Upload a new file to the SPIFFS
@@ -384,7 +430,17 @@ void handleFileUpload()
     }
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------------
 // When a WebSocket message is received
+// Implemented set commands:
+//  B brightness of display       T text to scroll                    P set password
+//  S speed for scrolling         M display mode (clock, text, ...)   X save configuration
+//  I SSID                        m display mode (blinking,...)       sP secret period
+//  A add message to queue        cf clock font selection             sW secret window
+//  D delete message from queue   cm clock mode                                                     
+//  a set/delete delimiter        cM math mode
+//  tt timer time                 ts timer state
+// 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t lenght)
 { 
     IPAddress ip;
@@ -399,72 +455,82 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t lenght
             Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
             if(WiFi.softAPgetStationNum() == 0)                      // If the ESP is connected to an AP
             {
-                webSocket.sendTXT(num, "c" + String("SSID: ") + String(WiFi.SSID()) + "<br>IP: " + String(WiFi.localIP().toString()));
+                webSocket.sendTXT(num, "C" + String("SSID: ") + String(WiFi.SSID()) + "<br>IP: " + String(WiFi.localIP().toString()));
                 connectedAP = true;
             }
             else                                                     // If a station is connected to the ESP SoftAP
             {
-                webSocket.sendTXT(num, "c" + String("SSID: ") + String(ssidAP) + "<br>IP: " + String("192.168.4.1"));
+                webSocket.sendTXT(num, "C" + String("SSID: ") + String(ssidAP) + "<br>IP: " + String("192.168.4.1"));
                 connectedAP = false;
             }
             //eepromReadConfig();                                      // Read configuration from EEPROM (why?)
-            webSocket.sendTXT(num, "b" + String(config.brightness));
-            webSocket.sendTXT(num, "m" + String(config.mode));
-            webSocket.sendTXT(num, "s" + String(SCROLL_MAX_SPEED - config.speed + SCROLL_MIN_SPEED));
-            webSocket.sendTXT(num, "t" + String(config.message));
-            webSocket.sendTXT(num, "i" + String(config.ssid));
-            webSocket.sendTXT(num, "p" + String(config.password));
-            webSocket.sendTXT(num, "f" + String(config.clockFont));
+            webSocket.sendTXT(num, "b"  + String(config.brightness));
+            webSocket.sendTXT(num, "m"  + String(config.mode));
+            webSocket.sendTXT(num, "s"  + String(SCROLL_MAX_SPEED - config.speed + SCROLL_MIN_SPEED));
+            webSocket.sendTXT(num, "t"  + String(config.message));
+            webSocket.sendTXT(num, "i"  + String(config.ssid));
+            webSocket.sendTXT(num, "p"  + String(config.password));
+            webSocket.sendTXT(num, "cf" + String(config.clockFont));
+            webSocket.sendTXT(num, "cm" + String(config.clockMode));
+            webSocket.sendTXT(num, "cM" + String(config.mathMode));
             webSocket.sendTXT(num, "SP" + String(config.secretPeriod));
             webSocket.sendTXT(num, "SW" + String(config.secretWindow));
+            webSocket.sendTXT(num, "v"  + String(DieZeileVersion));
             clearDisplay();
             strcpy(currentMessage, config.message);                  // Copy config message in case startAP() has overwritten it
             display_mode_changed = true;                             // Set display_mode_changed for clocks to be set at once
             break;
-        case WStype_TEXT:                                            // If new text data is received
+        case WStype_TEXT: {                                          // If new text data is received
             Serial.printf("[%u] get Text: %s\n", num, payload);
-            if(payload[0] == 'B')                                    // We get brightness
-            {
-                setBrightness((int)strtol((const char *)&payload[1], NULL, 10));
-            }
-            else if(payload[0] == 'S')                               // We get speed for scrolling text
-            {
-                setSpeed((int)strtol((const char *)&payload[1], NULL, 10));
-            }
-            else if(payload[0] == 'T')                               // We get text to scroll
-            {
-                String Text=(const char *)&payload[1];
-                setText(Text);
-                webSocket.sendTXT(num, "m" + String(config.mode));
-            }
-            else if(payload[0] == 'M')                               // We get mode
-            {
-                setMode((int)strtol((const char *)&payload[1], NULL, 10));
-            }
-            else if(payload[0] == 'f')                               // We get clock font
-            {
-                setClockFont((int)strtol((const char *)&payload[1], NULL, 10));
-            }
-            else if(payload[0] == 'I')                               // We get SSID
-            {
-                strcpy(config.ssid, (const char *)&payload[1]);
-            }
-            else if(payload[0] == 'P')                               // We get Password
-            {
-                strcpy(config.password, (const char *)&payload[1]);
-            }
-            else if(payload[0] == 'X')                               // We get save config command
-            {
-                setSaveConfig();
-            }
-            else if(payload[0] == 's')                               // We get secret parameter setting
-            {
-                if(payload[1] == 'P' )
-                  setSecretPeriod((int)strtol((const char *)&payload[2], NULL, 10));
-                else if(payload[1] == 'W' )
-                  setSecretWindow((int)strtol((const char *)&payload[2], NULL, 10));
-            }
-            break;
+            switch(payload[0]) {
+              case 'B': setBrightness((int)strtol((const char *)&payload[1], NULL, 10));  break;
+              case 'S': setSpeed((int)strtol((const char *)&payload[1], NULL, 10));       break;
+              case 'T': {
+                          String Text=(const char *)&payload[1];
+                          setText(Text);
+                          webSocket.sendTXT(num, "m" + String(config.mode));
+                        }
+                        break;
+              case 'M': setMode((int)strtol((const char *)&payload[1], NULL, 10));        break;
+              case 'm': setDisplayMode((int)strtol((const char *)&payload[1], NULL, 10)); break;
+              case 'D': mqDelete((int)strtol((const char *)&payload[1], NULL, 10));       break;
+              case 'I': strcpy(config.ssid, (const char *)&payload[1]);                   break;
+              case 'P': strcpy(config.password, (const char *)&payload[1]);               break;
+              case 'X': setSaveConfig();                                                  break;
+              case 'a': mqDelimiter((const char *)&payload[1]);                           break;
+              case 's': 
+                        if(payload[1] == 'P' )      setSecretPeriod((int)strtol((const char *)&payload[2], NULL, 10));
+                        else if(payload[1] == 'W' ) setSecretWindow((int)strtol((const char *)&payload[2], NULL, 10));
+                        break;
+              case 't': 
+                        if(payload[1] == 't' )      setTimerTime((int)strtol((const char *)&payload[2], NULL, 10));   
+                        else if(payload[1] == 's' ) setTimerState((int)strtol((const char *)&payload[2], NULL, 10));   
+                        else if(payload[1] == 'g' ) {
+                          webSocket.sendTXT(num, "Tg" + String(remainingSeconds));
+                        }
+                        break;
+              case 'c': 
+                        if(payload[1]=='f')       setClockFont((int)strtol((const char *)&payload[2], NULL, 10));   
+                        else if(payload[1]=='m')  setClockMode((int)strtol((const char *)&payload[2], NULL, 10));
+                        else if(payload[1]=='M')  setMathMode((int)strtol((const char *)&payload[2], NULL, 10));
+                        break;
+              case 'd': 
+                        if(payload[1]=='m')       setDisplayMode((int)strtol((const char *)&payload[2], NULL, 10));   
+                        else if(payload[1]=='p')  setDisplayPeriod((int)strtol((const char *)&payload[2], NULL, 10));
+                        break;
+              case 'A': {
+                          String val=(const char *)&payload[1];
+                          int atPos=val.toInt();
+                          int index=val.indexOf('=');
+                          if(index>0)
+                            val.remove(0, index+1);
+                          mqAddAt(atPos, val.c_str());
+                          // else error (ignored)
+                        }
+                        break;
+           }
+        }
+        break;
     }
 }
 
@@ -489,6 +555,7 @@ void setSpeed(int newSpeed)
 void setMode(int newMode)
 {
     if(config.mode!=newMode) {
+      lastMode=config.mode;
       config.mode = newMode;
       if(config.mode == MODE_SCROLLING_TEXT)
       {
@@ -504,6 +571,34 @@ void setMode(int newMode)
       Serial.printf("set mode=%d (no change)\n", config.mode);
 }
 
+void setDisplayMode(int newDisplayMode)
+{
+    if(config.displayMode!=DM_NORMAL) {                 // mode change only if normal mode is active
+      Serial.printf("set displaymode=%d (currently not allowed)\n", newDisplayMode);
+      return;
+    }
+
+    switch(newDisplayMode) {
+      case DM_NORMAL:
+      case DM_BLINK:
+      case DM_GLOW:
+      case DM_RAMPUP:
+      case DM_RAMPDOWN:
+          config.displayMode=newDisplayMode;
+          break;
+      default:
+      Serial.printf("set displaymode=%d (no change)\n", config.displayMode);
+          config.displayMode=DM_NORMAL;
+    }
+    Serial.printf("set displaymode=%d\n", config.displayMode);
+}
+
+void setDisplayPeriod(int newPeriod)
+{
+    config.displayPeriod = newPeriod;
+    Serial.printf("set displayPeriod=%d\n", config.displayPeriod);
+}
+
 void setSecretPeriod(int newPeriod)
 {
     config.secretPeriod = newPeriod;
@@ -516,11 +611,46 @@ void setSecretWindow(int newWindow)
     Serial.printf("set secretWindow=%d\n", config.secretWindow);
 }
 
+void setTimerTime(int time)
+{
+    config.timerTime=time;
+    Serial.printf("set timerTime=%d\n", config.timerTime);
+    config.timerState=timerState=TS_SET;
+}
+
+void setTimerState(int newState)
+{
+    config.timerState=newState;
+    Serial.printf("set timerState=%d\n", config.timerState);
+    switch(newState){
+      case TS_RUNNING:  timerState=TS_RUNNING;  break;
+      case TS_SET:      timerState=TS_SET;      break;
+      case TS_PAUSE:    timerState=TS_PAUSE;    break;
+      default:          timerState=TS_EXIT;     
+    }
+}
+
 void setClockFont(int newFont)
 {
     config.clockFont = newFont;
+    display_mode_changed = true;
     Serial.printf("set clockFont=%d\n", config.clockFont);
 }
+
+void setClockMode(int newMode)
+{
+    config.clockMode = newMode;
+    display_mode_changed = true;
+    Serial.printf("set clockMode=%d\n", config.clockMode);
+}
+
+void setMathMode(int newMode)
+{
+    config.mathMode = newMode;
+    display_mode_changed = true;
+    Serial.printf("set mathMode=%d\n", config.mathMode);
+}
+
 
 void setText(String newText)
 {
@@ -658,10 +788,9 @@ void mqPrint()
 /*************************************************************************************************************************************/
 /******************************************************   M A T R I X   R O W   ******************************************************/
 /*************************************************************************************************************************************/
-
 void cbScrollDataSink(uint8_t dev, MD_MAX72XX::transformType_t t, uint8_t col)
 {
-  /*
+  #ifdef BUFFER_RECORDING
   unsigned char b=(unsigned char) col;
   unsigned char bits[9];
   int j;
@@ -683,13 +812,13 @@ void cbScrollDataSink(uint8_t dev, MD_MAX72XX::transformType_t t, uint8_t col)
       recordIndex=0;
     }
   }
-  */
+  #endif
 }
 
 char *nextMessage()
 {
     static enum { S_QUEUEorSECRET, S_DELIMITER, S_SECRET_END } state = S_QUEUEorSECRET;
-    char *message="";
+    char *message="";    
 
     switch(state) 
     {
@@ -756,6 +885,11 @@ uint8_t cbScrollDataSource(uint8_t dev, MD_MAX72XX::transformType_t t)
     static uint8_t cBuf[8];
     uint8_t colData = 0;
     char cc;
+
+    if(currentMessage[0] == 0)
+    {
+        state = S_IDLE;                     // exit scrolling if string is cleared
+    }
 
     // Finite state machine to control what we do on the callback
     switch(state)
@@ -849,16 +983,17 @@ uint8_t cbScrollDataSource(uint8_t dev, MD_MAX72XX::transformType_t t)
 
 void clearDisplay(void)
 {
+    //Serial.printf("clearDisplay()\n");
     strcpy(currentMessage, "");
-    mx.transform(MD_MAX72XX::TSL);     // Cancel scrolling by calling callback one time with empty string
-    mx.clear();                        // Clear display
+    //mx.transform(MD_MAX72XX::TSL);            // Cancel scrolling by calling callback one time with empty string
+    cbScrollDataSource(0, MD_MAX72XX::TSL);     // rest internal state to S_IDLE without right scroll (prevents display flicker)
+    mx.clear();                                 // Clear display
 }
 
 
 /*************************************************************************************************************************************/
 /******************************************************   M A T H   C L O C K   ******************************************************/
 /*************************************************************************************************************************************/
-
 int (*operators[4])(int, int);
 char operatorTexts[] = "+-*:";
 
@@ -905,11 +1040,11 @@ int eval(int x, int y, int z, int op1, int op2)
 {
     if(op1 == 3 || (op1 == 2 && op2 != 3) || (op1 == 1 && op2 < 2)) //If first operator should get executed first
     {
-        return operators[op2](operators[op1](x, y), z);
+        return operators[op2](operators[op1](x, y), z);             // calculate (x op1 y) op2 z
     }
     else
     {
-        return operators[op1](x, operators[op2](y, z));
+        return operators[op1](x, operators[op2](y, z));             // calculate x op1 (y op2 z)
     }
 }
 
@@ -998,67 +1133,53 @@ void getFormulaRepresentationAddOnly(char* result, int number)
 
 
 /*************************************************************************************************************************************/
-/**************************************************   M O D E   F U N C T I O N S   **************************************************/
+/********************************************   C L O C K   M O D E   F U N C T I O N S   ********************************************/
 /*************************************************************************************************************************************/
-
 void showClock(bool monthAsString)
 {
+    #define MAX_CHARS_CLOCK 13          // 'hh:mm dd.mm.' or 'hh:mm dd.mmm' + terminating \0
+    static uint8_t lastTimeString[MAX_CHARS_CLOCK];                        
     static uint8_t lastMinute = 60;     // initialize for first time with not defined minute value
     static char *Month[] = { "Jan", "Feb", "Mär", "Apr", "Mai", "Jun", 
                              "Jul", "Aug", "Sep", "Okt", "Nov", "Dez" }; 
 
     if((currentTime->tm_min != lastMinute) || (display_mode_changed == true))
     {          
-        if(display_mode_changed)              display_mode_changed = false;
-        if(currentTime->tm_min != lastMinute) lastMinute = currentTime->tm_min;
+        if(display_mode_changed) {
+          display_mode_changed = false;
+          clearDisplay();
 
-        char timeString[13] = "00:00 00.00."; // or "00:00 DD.MMM" (00:00 MMM DD)
+          memset((char *)lastTimeString, 0, MAX_CHARS_CLOCK);
+        }
+        lastMinute = currentTime->tm_min;
+
+        uint8_t timeString[MAX_CHARS_CLOCK];  // "00:00 00.00." or "00:00 DD.MMM"
         if(validTime)
         {
-            clearDisplay();
             timeString[0] = 0x30 + currentTime->tm_hour / 10;
             timeString[1] = 0x30 + currentTime->tm_hour - (currentTime->tm_hour / 10) * 10;
+            timeString[2] = 147;  // small :
             timeString[3] = 0x30 + currentTime->tm_min / 10;
             timeString[4] = 0x30 + currentTime->tm_min - (currentTime->tm_min / 10) * 10;
-            if(monthAsString)
-            {
-                timeString[6]  = 0x30 + currentTime->tm_mday / 10;
-                timeString[7]  = 0x30 + currentTime->tm_mday - (currentTime->tm_mday / 10) * 10;
+            timeString[5] = ' ';
+            timeString[6] = 0x30 + currentTime->tm_mday / 10;
+            timeString[7] = 0x30 + currentTime->tm_mday - (currentTime->tm_mday / 10) * 10;
+            timeString[8] = 138; // small .
+            if(monthAsString) {
                 timeString[9]  = Month[currentTime->tm_mon][0];
                 timeString[10] = Month[currentTime->tm_mon][1];
                 timeString[11] = Month[currentTime->tm_mon][2];
             }
-            else
-            {
-                timeString[6] = 0x30 + currentTime->tm_mday / 10;
-                timeString[7] = 0x30 + currentTime->tm_mday - (currentTime->tm_mday / 10) * 10;
+            else {
                 timeString[9]  = 0x30 + (currentTime->tm_mon + 1) / 10;
                 timeString[10] = 0x30 + (currentTime->tm_mon + 1) - ((currentTime->tm_mon + 1) / 10) * 10;
+                timeString[11] = 138; // small .
             }
         }
-        mx.setChar(63, timeString[0]);      // Hour 1st digit
-        mx.setChar(57, timeString[1]);      // Hour 2nd digit
-        mx.setChar(51, 147);                // use small : 
-        mx.setChar(48, timeString[3]);      // Minutes 1st digit
-        mx.setChar(42, timeString[4]);      // minutes 2nd digit
-        if(monthAsString)
-        {
-            mx.setChar(31, timeString[6]);      // Day 1st digit
-            mx.setChar(25, timeString[7]);      // Day 2nd digit
-            mx.setChar(19, 138);                // small point 
-            mx.setChar(16, timeString[9]);      // Month 1st char
-            mx.setChar(10, timeString[10]);     // Month 2nd char
-            mx.setChar(4,  timeString[11]);     // Month 3rd char
-        }
-        else
-        {
-            mx.setChar(28, timeString[6]);      // Day 1st digit
-            mx.setChar(22, timeString[7]);      // Day 2nd digit
-            mx.setChar(16, 138);                // use small point and display in comressed form to support two dots
-            mx.setChar(13, timeString[9]);      // Month 1st digit
-            mx.setChar(7,  timeString[10]);     // Month 2nd digit
-            mx.setChar(1,  138);                // use small point and display in comressed form to support two dots
-        }
+        else strncpy((char *)timeString, "00:00 00.00.", MAX_CHARS_CLOCK);
+
+        displayString(0, 12, 63, timeString, lastTimeString);
+
         //mqAddAt(0, String(timeString)); 
     }
 }
@@ -1066,25 +1187,26 @@ void showClock(bool monthAsString)
 // ------------------------------------------------------------------------------------------------------------------------------------
 void showFontClock(int font, bool showSeconds)
 {
-    static uint8_t lastSecond = 60;     // initialize for first time with not defined minute value
-    static uint8_t lastDigits[] = { 99, 99, 99, 99, 99, 99, 99, 99, 99,
-                                    99, 99, 99, 99, 99, 99, 99, 99 };   // means undefined
-    uint8_t digits[] = { 0, 0, 10, 0, 0, 10, 0, 0, 11,
-                         0, 0, 10, 0, 0, 10, 0, 0 };                    // 00:00:00 MM:DD:YY
+    #define MAX_CHARS_FONTCLOCK 17        // 'hh:mm:ss dd.mm.yy' + terminating \0
+    static uint8_t lastSecond = 60;       // initialize for first time with not defined minute value
+    static uint8_t lastDigits[17];
+    static int lastFont=-1;
+    uint8_t digits[MAX_CHARS_FONTCLOCK];  
     int hour   =currentTime->tm_hour;
     int minutes=currentTime->tm_min;
     int seconds=currentTime->tm_sec;
     int day    =currentTime->tm_mday;
     int month  =currentTime->tm_mon;
     int year   =(currentTime->tm_year+1900)%100;
-    int fontIndex=(font?148:159);
-    static int lastFont=-1;
 
     if((seconds!=lastSecond) || (display_mode_changed==true))
     {          
       if(display_mode_changed || lastFont!=font) {
         display_mode_changed = false;
         clearDisplay();
+
+        for(int i=0; i<MAX_CHARS_FONTCLOCK; i++)
+          lastDigits[i]=99;       // means not initialized
       }
       lastSecond=seconds;
       lastFont=font;
@@ -1111,27 +1233,75 @@ void showFontClock(int font, bool showSeconds)
         digits[15]  = year / 10;
         digits[16] = year - (year / 10) * 10;
       }
+      else memset(digits, 0, MAX_CHARS_FONTCLOCK);
 
-      #define LOCAL_BUF_SIZE 5
-      uint8_t buf[LOCAL_BUF_SIZE];
-      uint8_t *pb;
-      int column; 
-      int chars;
       switch(font) {
-        case 0:  { fontIndex=159; chars=17; column=60; } break;  // small font   -> display time and date
-        case 1:  { fontIndex=148; chars=8;  column=55; } break;  // bold font    -> display time only
-        default: { fontIndex=48;  chars=8;  column=55; }         // default font -> display time
+        case 0:  displayString(FONT_SMALL_4x7, 17, 60, digits, lastDigits); break;  // small font   -> display time and date
+        case 1:  displayString(FONT_BOLD_5x8,   8, 52, digits, lastDigits); break;  // bold font    -> display time only
+        default: displayString(FONT_NORMAL_5x7, 8, 55, digits, lastDigits);         // default font -> display time
       }
-      
-      for(int i=0; i<chars; i++) {
-        int cols=mx.getChar(fontIndex+digits[i], LOCAL_BUF_SIZE, buf);
-        pb=buf;
-        for(int j=0; j<cols; j++) {                   // display char columns
-          mx.setColumn(column, *pb++);
-          column--;
-        }
-        column--;
+
+      //mqAddAt(0, String(timeString)); 
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+void showPercentClock()
+{
+    #define MAX_CHARS_PERCENTCLOCK 12                       // '00.0% 00.00%' + terminating \0 
+    static uint32_t lastMilliSeconds=0;
+    static uint8_t lastTimeString[MAX_CHARS_PERCENTCLOCK];
+    int hour   =currentTime->tm_hour;
+    int minutes=currentTime->tm_min;
+    int seconds=currentTime->tm_sec;
+    uint32_t actMilliSeconds=millis();
+
+    if((actMilliSeconds>=lastMilliSeconds+3700) || (display_mode_changed==true))           // 3.6 seconds = 0.1% of minutes (use 3700 ms)
+    {          
+      if(display_mode_changed) {
+        display_mode_changed = false;
+        clearDisplay();
+
+        for(int i=0; i<11; i++)
+          lastTimeString[i]='x'; 
       }
+      lastMilliSeconds=actMilliSeconds;
+
+      uint8_t timeString[MAX_CHARS_PERCENTCLOCK];
+      if(validTime)
+      {
+        float fh=(hour*3600+minutes*60+seconds)/86400.0*100.0;          // hour fraction (24 hours=100%)
+        int   ih =(int)fh;                      
+        int   ihf=(int)((fh-(float)ih)*10);
+        float fm=(minutes*60+seconds)/3600.0*100.0;                     // minutes fraction (60 Minutes = 100%)
+        int   im =(int)fm;
+        int   imf=(int)((fm-(float)im)*10);
+
+        /*
+        String debug  ="fh=" + String(fh) + " ih/ihf=" + String(ih) +"/" + String(ihf) + "  ";
+               debug +="fm=" + String(fm) + " im/imf=" + String(im) +"/" + String(imf) + "\n";
+        Serial.printf("%s", debug.c_str());
+        */
+        //sprintf((char *)timeString, "%02d.%01d%% %02d.%01d%%", ih, ihf, im, imf);
+        //timeString[2]  = 172;                               // small .  
+        //timeString[5]  = 173;                               // small : 
+        //timeString[8]  = 172;                               // small .  
+        
+        timeString[0]  = 48 + ih / 10;                      // digit    6
+        timeString[1]  = 48 + ih - (ih / 10) * 10;          // digit    6
+        timeString[2]  = 172;                               // small .  3
+        timeString[3]  = 48 + ihf;                          // digit    6
+        timeString[4]  = '%';                               // %        6
+        timeString[5]  = 173;                               // :        7 
+        timeString[6]  = 48 + im / 10;                      // digit    6
+        timeString[7]  = 48 + im - (im / 10) * 10;          // digit    6
+        timeString[8]  = 172;                               // small .  3
+        timeString[9]  = 48 + imf;                          // digit    6
+        timeString[10] = '%';                               // %        6
+      }
+      else strncpy((char *)timeString, "00.0% 00.0%", MAX_CHARS_PERCENTCLOCK);
+
+      displayString(0, 11, 60, timeString, lastTimeString);
 
       //mqAddAt(0, String(timeString)); 
     }
@@ -1205,33 +1375,16 @@ void showSetTheoryClock(void)
         s  = seconds-s30*30-s5*5;
 
         //h12=h4=h=m15=m5=m=s30=s5=s=5;                           // alle squares on! for testing
-
-        displaySquare(63, 7, 8, 8, (h12?true:false));             // 12 hours
-
-        for(int i=0; i<2; i++)
-          displaySquare(54,  7-i*5, 6, 3, (i<h4?true:false));     // 4 hours
-          
-        for(int i=0; i<3; i++)                                    // hours
-          displaySquare(47, 7-i*3, 3, 2, (i<h?true:false));
-
-        for(int i=0; i<3; i++)                                    // 15 minutes
-          displaySquare(35, 7-i*3, 8, 2, (i<m15?true:false));
-          
-        for(int i=0; i<2; i++)                                    // 5 minutes
-          displaySquare(26, 7-i*5, 3, 3, (i<m5?true:false));
-
-        for(int i=0; i<4; i++)                                    // minutes
-          displaySquare(22, 7-i*2, 3, 1, (i<m?true:false));
-
-        displaySquare(10, 7, 3, 8, (s30?true:false));             // 30 seconds
-
-        for(int i=0; i<2; i++)                                    // 5 seconds (2nd col)
-          displaySquare(6, 7-i*3, 2, 2, (i+3<s5?true:false));
-        for(int i=0; i<3; i++)                                    // 5 seconds
-          displaySquare(3, 7-i*3, 2, 2, (i<s5?true:false));
-        
-        for(int i=0; i<4; i++)                                    // seconds
-          displaySquare(0, 7-i*2, 1, 1, (i<s?true:false));
+                               displaySquare(63, 7,     8, 8, (h12?true:false));    // 12 hours
+        for(int i=0; i<2; i++) displaySquare(54, 7-i*5, 6, 3, (i<h4?true:false));   // 4 hours
+        for(int i=0; i<3; i++) displaySquare(47, 7-i*3, 3, 2, (i<h?true:false));    // hours
+        for(int i=0; i<3; i++) displaySquare(35, 7-i*3, 8, 2, (i<m15?true:false));  // 15 minutes
+        for(int i=0; i<2; i++) displaySquare(26, 7-i*5, 3, 3, (i<m5?true:false));   // 5 minutes
+        for(int i=0; i<4; i++) displaySquare(22, 7-i*2, 3, 1, (i<m?true:false));    // minutes
+                               displaySquare(10, 7,     3, 8, (s30?true:false));    // 30 seconds
+        for(int i=0; i<2; i++) displaySquare(6,  7-i*3, 2, 2, (i+3<s5?true:false)); // 5 seconds (2nd col)
+        for(int i=0; i<3; i++) displaySquare(3,  7-i*3, 2, 2, (i<s5?true:false));   // 5 seconds
+        for(int i=0; i<4; i++) displaySquare(0,  7-i*2, 1, 1, (i<s?true:false));    // seconds
 
         //Serial.printf("%dx12 + %dx4 + %d : %dx15 + %dx5 + %d\n", h12, h4, h, m15, m5, m);
     }
@@ -1251,32 +1404,67 @@ void displaySquare(uint8_t px, uint8_t py, uint8_t sx, uint8_t sy, bool on)
 // ------------------------------------------------------------------------------------------------------------------------------------
 void showMathClock(bool addonly)
 {
+    #define MAX_CHARS_MATHCLOCK 12                                     // '0+0+0 0+0+0' + terminating \0
+    static uint8_t lastTimeString[MAX_CHARS_MATHCLOCK];
+
     if((millis() > prevMillis + MATH_CLOCK_INTERVAL) || (display_mode_changed == true))
     {          
         prevMillis = millis();
-        if(display_mode_changed) display_mode_changed = false;
+        if(display_mode_changed) {
+          display_mode_changed = false;
+          strncpy((char *)lastTimeString, "x.x.x x.x.x", MAX_CHARS_MATHCLOCK);
+          clearDisplay();
+        }
   
-        char timeString[12] = "0+0+0 0+0+0";
+        uint8_t timeString[MAX_CHARS_MATHCLOCK];
         if(validTime)
         {
-            clearDisplay();
+            if(addonly) {
+                getFormulaRepresentationAddOnly((char *)(&timeString[0]), currentTime->tm_hour);
+                getFormulaRepresentationAddOnly((char *)(&timeString[6]), currentTime->tm_min);
+            }
+            else {
+                getFormulaRepresentation((char *)(&timeString[0]), currentTime->tm_hour);
+                getFormulaRepresentation((char *)(&timeString[6]), currentTime->tm_min);
+            }
+            timeString[5]=175;  // 4 column space
+        }
+        else strncpy((char *)timeString, "0+0+0 0+0+0", MAX_CHARS_MATHCLOCK);
 
-            if(addonly)
-            {
-                getFormulaRepresentationAddOnly(&timeString[0], currentTime->tm_hour);
-                getFormulaRepresentationAddOnly(&timeString[6], currentTime->tm_min);
-            }
-            else
-            {
-                getFormulaRepresentation(&timeString[0], currentTime->tm_hour);
-                getFormulaRepresentation(&timeString[6], currentTime->tm_min);
-            }
+        displayString(0, MAX_CHARS_MATHCLOCK-1, 63, timeString, lastTimeString);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+void displayString(int fontIndex, int chars, int column, uint8_t digits[], uint8_t lastDigits[])
+{
+    #define MAX_DIGIT_COLS 64
+    uint8_t buf[MAX_DIGIT_COLS];
+    uint8_t *pb;
+
+    //Serial.printf("displayString()\n");
+    for(int i=0; i<chars; i++) {
+      int cols=mx.getChar(fontIndex+digits[i], MAX_DIGIT_COLS, buf);
+
+      if(digits[i]!=lastDigits[i]) {                // character changed
+        //Serial.printf("%02d: %03d != %03d\n", i, digits[i], lastDigits[i]);
+        pb=buf;
+        for(int j=0; j<cols; j++) {                 // display char columns
+          mx.setColumn(column, *pb++);
+          column--;
         }
-        for(int i = 0; i < 5; i++)
-        {
-            mx.setChar(63 - (i * 6), timeString[i]);
-            mx.setChar(28 - (i * 6), timeString[i + 6]);
-        }
+      }
+      else {
+        //Serial.printf("%02d: %03d == %03d\n", i, digits[i], lastDigits[i]);
+        column-=cols;
+      }
+
+      lastDigits[i]=digits[i];
+      
+      column--;
+
+      if(column<0)
+        return;
     }
 }
 
@@ -1333,7 +1521,6 @@ void showTextClock(bool longFormat)
     }
 }
 
-
 void scrollText(uint8_t speed)
 {
     static uint32_t prevTime = 0;
@@ -1344,6 +1531,186 @@ void scrollText(uint8_t speed)
         prevTime = millis();           // Starting point for next time
     }
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+void modeTimer(int secTimerTime, int font)
+{
+    #define MAX_CHARS_TIMER 12                                    // 'xx 00:00:00' + terminating \0
+    static uint8_t lastTimeString[MAX_CHARS_TIMER];               // buffer to store last printed time string
+    static bool timerCountdown=0;                                 // true=countdown mode, false=stop watch mode
+    uint8_t timeString[MAX_CHARS_TIMER];                          // buffer for time string to be printed on display
+    int seconds=currentTime->tm_sec;                              // seconds of current minutre
+    uint32_t actMillis=millis();                                  // actual milliseconds (since 1.1.1970)
+    static uint32_t lastMillis=0;                       
+    uint32_t secDeltaTime=(actMillis-lastMillis)/1000;            
+    uint32_t lastRemainingSeconds=0;
+
+    switch(timerState) {
+      case TS_SET: {
+                if(display_mode_changed) {
+                  display_mode_changed = false;
+                  memset(lastTimeString, ' ', MAX_CHARS_TIMER-1);
+                  lastTimeString[MAX_CHARS_TIMER]=0;
+                  clearDisplay();
+                }
+                remainingSeconds=secTimerTime;                    // set timer time
+                if(remainingSeconds==0) timerCountdown=false;     // timer time==0  --> stop watch mode
+                else                    timerCountdown=true;      // timer time>0   --> count down mode          
+
+                timerTimeString(remainingSeconds, timeString, MAX_CHARS_TIMER, timerCountdown, font);
+                displayString(0, MAX_CHARS_TIMER-1, 63, timeString, lastTimeString);
+                
+                Serial.printf("Timer TS_SET     remaining time: %d sec %s\n", remainingSeconds, (timerCountdown?"countdown":"stopwatch"));               
+                timerState=TS_PAUSE;
+            }
+            break;
+
+      case TS_RUNNING: {
+                if(secDeltaTime>=1) {                                                 // new second -> dispalay needs to be updated
+                  if(timerCountdown) remainingSeconds-=secDeltaTime;                  // do count down (timer mode)
+                  else               remainingSeconds+=secDeltaTime;                  // do count up (stop watch mode)
+
+                  Serial.printf("Timer TS_RUNNING %d sec %s\n", remainingSeconds, (timerCountdown?"remaining":"elapsed"));
+                  lastMillis=actMillis;                                               // save time of last update
+
+
+                  if(0<=remainingSeconds || remainingSeconds<=354460) {                // do count up/down 354460sec = 99hours+59minutes
+                    timerTimeString(remainingSeconds, timeString, MAX_CHARS_TIMER, timerCountdown, font);
+                    displayString(0, MAX_CHARS_TIMER-1, 63, timeString, lastTimeString);
+                  }
+                  else timerState=TS_SET;                                             // count down or count up end reached
+                }
+            }
+            break;
+
+      case TS_PAUSE: {    // do nothing
+                if(secDeltaTime>=1) {
+                  lastMillis=actMillis;
+                  Serial.printf("Timer TS_PAUSE   remaining time: %d sec\n", remainingSeconds);
+                } 
+            }
+            break;
+
+      case TS_EXIT: {    // timer mode ended
+                  Serial.printf("Timer TS_EXIT\n");
+                  config.mode=lastMode;     
+                  display_mode_changed = true;
+                  clearDisplay();
+                  timerState=TS_SET;
+            }
+            break;      
+      
+      default:
+            timerState=TS_SET;
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+//  print the string for timer mode display
+// ------------------------------------------------------------------------------------------------------------------------------------
+void timerTimeString(uint32_t remainingSeconds, uint8_t *timeString, int size, bool countdown, int font)
+{
+    int fontOffset=0;
+    char space=' ';
+    
+    int rHour= remainingSeconds/3600;
+    int rMin =(remainingSeconds-rHour*3600)/60;
+    int rSec = remainingSeconds-rHour*3600-rMin*60;
+
+    switch(font) {
+      case 0:  { fontOffset=FONT_SMALL_4x7;  space=CHAR_SPACE_22COLS; } break;   // small font   
+      case 1:  { fontOffset=FONT_BOLD_5x8;   space=CHAR_SPACE_10COLS; } break;   // bold font    
+      default: { fontOffset=FONT_NORMAL_5x7; space=CHAR_SPACE_10COLS; }          // default font 
+    }
+
+    timeString[0]=CHAR_HOURGLASS;                       // set first char to 'hour glass' logo
+    if(countdown) timeString[1]=CHAR_ARROW_DOWN_5x7;    // set second char to 'arrow down' (countdown)
+    else          timeString[1]=CHAR_ARROW_UP_5x7;      // set second char to 'arrow up' (stop watch)
+    timeString[2] =space;
+    timeString[3] =fontOffset + rHour/10;               // hour first digit (tens)
+    timeString[4] =fontOffset + rHour - (rHour/10)*10;  // hour second digit (ones)
+    timeString[5] =CHAR_COLON_2X8;                      // small :
+    timeString[6] =fontOffset + rMin/10;                // minute first digit (tens)
+    timeString[7] =fontOffset + rMin - (rMin/10) * 10;  // minute second digit (ones)
+    timeString[8] =CHAR_COLON_2X8;                      // small :
+    timeString[9] =fontOffset + rSec/10;                // second first digit (tens)
+    timeString[10]=fontOffset + rSec - (rSec/10) * 10;  // second second digit (ones)
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+//  handler for the different display modes (normal, blink, glow, ramp-up, ramp-down)
+// ------------------------------------------------------------------------------------------------------------------------------------
+void displayModeBlink(uint32_t msPeriod, uint32_t msDuration, int mode)
+{
+    static uint32_t prevTime = 0;
+    static uint32_t endTime = 0;
+    static bool on=true;
+    uint32_t actTime=millis();
+    static int intensity = 0;
+    static int increment = 0;
+    
+    if(msPeriod<500) msPeriod=500;                          // limit period to at least 500ms
+    switch(mode) {
+      case DM_NORMAL:
+        msPeriod=msPeriod/2;
+        return;
+      case DM_GLOW:
+        msPeriod=msPeriod/30;
+        break;
+      case DM_RAMPUP:
+      case DM_RAMPDOWN:
+        msPeriod=msPeriod/15;
+        break;
+    }
+
+    if(actTime >= prevTime+msPeriod)
+    {
+        if(endTime==0) {
+          endTime=actTime+msDuration;   
+          intensity=config.brightness;
+          increment=1;
+          Serial.printf("Blink: period=%dms duration=%d mode=%dms\n", msPeriod, msDuration, mode);
+        }
+        else if(actTime > endTime) {
+          mx.control(MD_MAX72XX::INTENSITY, config.brightness);  // reset to orginial brightness
+          prevTime=endTime=0;
+          on=true;
+          Serial.printf("\nBlink finished\n");
+          config.displayMode=DM_NORMAL;
+          return;
+        }
+
+        prevTime = actTime;                                     // set starting time for next time
+
+        if(mode==DM_BLINK) {
+          if(on) {                                                // show text with high brightness
+            mx.control(MD_MAX72XX::INTENSITY, 15);
+            on=false;
+          }          
+          else {                                                  // show black or text with low brightness
+            mx.control(MD_MAX72XX::INTENSITY, 0);
+            on=true;
+          }
+        }
+        else {
+          if(mode==DM_GLOW) {
+            if(intensity>15) increment=-1;
+            if(intensity<1) increment=1;
+            intensity+=increment;
+          }
+          else if(mode==DM_RAMPUP) {
+              if(intensity<15) intensity++;
+              else intensity=1;
+          }
+          else { // DM_RAMPDOWN
+              if(intensity>1) intensity--;
+              else intensity=15;
+          }
+          mx.control(MD_MAX72XX::INTENSITY, intensity);
+        }
+    }
+}
+
 
 /*************************************************************************************************************************************/
 /*************************************************   S E C R E T S    F U N C T I O N S  *********************************************/
@@ -1364,17 +1731,18 @@ void scrollText(uint8_t speed)
 bool readSecretsFromFile()
 {
   File secretFile;
-  char *fileName="/secrets.txt";
   int nofLines=0;
   int iLine=0;
 
   Serial.printf("\nlooking for secrets...\n");
-  if(!SPIFFS.exists(fileName)) {
-    Serial.printf("could not find secrets file %s\n", fileName);
+  if(!SPIFFS.exists(SECRETS_FILENAME)) {
+    Serial.printf("could not find secrets file %s\n", SECRETS_FILENAME);
     return false;
   }
 
-  secretFile=SPIFFS.open(fileName, "r");
+  Serial.printf("found secrets.txt, reading ...\n");
+
+  secretFile=SPIFFS.open(SECRETS_FILENAME, "r");
   nofLines=0;                                         // determine the numbrer of lines in the file
   while(secretFile.available()) {                     // still chars to read
     char inChar=secretFile.read();    
@@ -1382,58 +1750,43 @@ bool readSecretsFromFile()
       nofLines++;
   }
   secretFile.close();  
-  Serial.printf("found secrets.txt with %d entries\n", nofLines);
 
   Secrets=(Secret *)malloc(++nofLines*sizeof(Secret));  
   if(Secrets==NULL) {                                 // malloc failed
+    Serial.printf("malloc() failed in line %d\n", __LINE__);
     return false;                                     //   return
   }
 
-  secretFile=SPIFFS.open(fileName, "r");
+  secretFile=SPIFFS.open(SECRETS_FILENAME, "r");
   #define MAX_FILE_LINESIZE 500
   char buffer[MAX_FILE_LINESIZE];
   char secret[MAX_FILE_LINESIZE];
 
-  iLine=0;                                            // scan and parse all lines
-  while(secretFile.available() && iLine<nofLines-1) { // if still chars to read from file 
-    int day;
-    int month;
-    int len=0;
-    bool eolFound=false;
-    do {                                              // read an entire line until '\n' found or EOF
-      char inChar=secretFile.read();    
-      if(inChar=='\n' || inChar==-1) {
-        eolFound=true;
-        buffer[len]=0;
-      }
-      else if(inChar!='\r')                           // copy char to buffer (except \CR char)
-        buffer[len++]=inChar;
-    }
-    while(!eolFound);
-    
-
-    sscanf(buffer, "%d, %d, %[^\n]s\n",               // 'parse' line 
+  iLine=0;                                                    // scan and parse all lines
+  while(secretFile.available() && iLine<nofLines-1) {         // if still chars to read from file 
+    Secrets[iLine].position=secretFile.position()+9;          // store file position of secret text
+    readToEndOfLine(secretFile, buffer, MAX_FILE_LINESIZE);   // read entire line
+    sscanf(buffer, "%d, %d, %[^\n]s\n",                       // 'parse' line 
            &(Secrets[iLine].day), 
            &(Secrets[iLine].month), secret);
-   
-    int msgLen=strlen(secret);
-    Secrets[iLine].secret=(char *)malloc(msgLen*sizeof(char)+1);
-    strcpy(Secrets[iLine].secret, secret);
 
-    #ifdef DEBUG_SECRETS
-    Serial.printf("%02d: %02d %02d %s\n", iLine+1, Secrets[iLine].day, Secrets[iLine].month, Secrets[iLine].secret);
+    if(iLine>0 && (iLine%100)==0)
+      Serial.printf("%04d,%c", iLine, (iLine%1000?' ':'\n'));
+    #ifdef DEBUG_SECRETS_MESSAGES
+    Serial.printf("%02d: %02d %02d %s\n", iLine+1, Secrets[iLine].day, Secrets[iLine].month, secret);
     #endif
     
     iLine++;
   }
   Secrets[iLine].day=-1;                              // add a terminating line to list of secrets 
   Secrets[iLine].month=-1;
-  Secrets[iLine].secret="end of secrets list";
-
-  #ifdef DEBUG_SECRETS
-  Serial.printf("%02d: %02d %02d %s (terminating secret)\n", iLine+1, Secrets[iLine].day, Secrets[iLine].month, Secrets[iLine].secret);
-  #endif
   
+  #ifdef DEBUG_SECRETS_MESSAGES
+  Serial.printf("%02d: %02d %02d (terminating secret)\n", iLine+1, Secrets[iLine].day, Secrets[iLine].month);
+  #endif
+
+  Serial.printf("%04d secrets\n", nofLines);
+
   secretFile.close();
   return true;
 }
@@ -1441,58 +1794,87 @@ bool readSecretsFromFile()
 // ------------------------------------------------------------------------------------------------------------------------------------
 void handleSecret(int minDistanceSeconds, int widthTimeframeSeconds)
 {
-    #define MAX_POOL_ELEMENTS 10
+    #define MAX_POOL_ELEMENTS 100
     static unsigned long nextMillis = 0;
-    char *secretsPool[MAX_POOL_ELEMENTS];
+    int secretsPool[MAX_POOL_ELEMENTS];
     int poolIndex=0;
 
-    if( MQS[0]!='\0' || Secrets==NULL)
+    if( MQS[0]!='\0' || Secrets==NULL || widthTimeframeSeconds==0)
       return;
       
     if (millis() > nextMillis)                                                  // next lookup time reached
     {       
       int day=currentTime->tm_mday;
       int month=currentTime->tm_mon+1;
-      Secret *sp=Secrets;
+     #define MAX_FILE_LS 500
+      char buffer[MAX_FILE_LS];
 
-      while((*sp).day!=-1)                                                      // secret list end not reached
+      int index=0;
+      while(Secrets[index].day!=-1)                                             // secret list end not reached
       {
-        if( (((*sp).day==0)   || ((*sp).day==day))     &&                       // specific day or wildcard found
-            (((*sp).month==0) || ((*sp).month==month)) ) {                      // specific month or wildcard found
-          secretsPool[poolIndex]=(*sp).secret;                                  // add to secrets pool
+        if( ((Secrets[index].day==0)   || (Secrets[index].day==day))     &&     // specific day or wildcard found
+            ((Secrets[index].month==0) || (Secrets[index].month==month)) ) {    // specific month or wildcard found
+          secretsPool[poolIndex]=index;                                         // add to secrets pool
           if(poolIndex<MAX_POOL_ELEMENTS) poolIndex++;
         }
-        sp++;
+        index++;
       }
 
-      if(poolIndex>0) {
+      if(poolIndex>0) {                                                         // at least one secret found
+        File secretFile=SPIFFS.open(SECRETS_FILENAME, "r");
+        
         #ifdef DEBUG_SECRETS
-        Serial.printf("%d matching secrets:\n", poolIndex);        
-        for(int i=0; i<poolIndex; i++)
-          Serial.printf("  %02d: %s\n", i+1, secretsPool[i]);        
+        Serial.printf("%d matching secrets\n", poolIndex);    
+        for(int i=0; i<poolIndex; i++) 
+          if(secretFile.seek(Secrets[secretsPool[i]].position)) {
+            readToEndOfLine(secretFile, buffer, MAX_FILE_LS);
+            Serial.printf("  %02d: %s\n", i+1, buffer);        
+          }
         #endif
 
         int selected=random(0, poolIndex-1);                                    // random selection from pool
-        snprintf(MQS, MAX_NOF_CHARS_OF_MSG,                                     // add secret to display with leading/trailing spaces
-                 "        %s         ", secretsPool[selected]);                    
-        #ifdef DEBUG_SECRETS
-        Serial.printf("new secret '%s'\n", secretsPool[selected]);            
-        #endif
+        buffer[0]=0;
+        if(secretFile.seek(Secrets[secretsPool[selected]].position))            // seek to selected secret entry in secrets file
+          readToEndOfLine(secretFile, buffer, MAX_FILE_LS);
+        secretFile.close();
 
-        lastMode=config.mode;                                                   // save current mode and
+        lastMode=config.mode;                                                   // save current mode (if not BLINK) and
         config.mode=MODE_SCROLLING_TEXT;                                        //  switch to text scrolling mode
       }
+      
       int waitSeconds=random(minDistanceSeconds, minDistanceSeconds+widthTimeframeSeconds);
       nextMillis=millis()+waitSeconds*1000;
 
       #ifdef DEBUG_SECRETS
-      if(MQS[0]=='\0') 
+      if(buffer[0]=='\0') 
         Serial.printf("no matching secret found\n");
-      Serial.printf("lookup for new secret %d seconds\n", waitSeconds);
+      else {
+        Serial.printf("new secret: '%s'\n", buffer);
+        snprintf(MQS, MAX_NOF_CHARS_OF_MSG,                                     // add secret to display with leading/trailing spaces
+                 "        %s    --     %s        ", buffer, buffer);    
+      }
+      Serial.printf("next secret lookup in %d seconds\n", waitSeconds);
       #endif
     }          
 }
 
+int readToEndOfLine(File in, char *buffer, int buf_size)
+{
+    int len=0;
+    bool eolFound=false;
+
+    while(len<buf_size && !eolFound) {    
+      char inChar=in.read();                          // read nect char from file
+      if(inChar=='\n' || inChar==-1) {    
+        eolFound=true;                                // end of line or end of file found
+        buffer[len]=0;                        
+      }
+      else if(inChar!='\r')                           // copy char to buffer (except \CR char)
+        buffer[len++]=inChar;
+    }
+
+    return len;
+}
 
 /*************************************************************************************************************************************/
 /*************************************************   S E T U P   F U N C T I O N S   *************************************************/
@@ -1537,6 +1919,14 @@ bool startSTA(void)
         Serial.print(WiFi.localIP());
         Serial.println("\n");
         connectedAP = true;
+        
+        prevMillis=millis();
+        mqAddAt(0, String(WiFi.localIP().toString()));
+        while(millis() < prevMillis + 8000) {
+          delay(20);
+          scrollText(1);
+        }
+        mqDelete(0);
     }
     else
     {
@@ -1552,17 +1942,20 @@ bool startAP(void)
 {
     WiFi.mode(WIFI_AP);
     WiFi.softAP(ssidAP, passwordAP);                    // Start the access point
-    strcpy(currentMessage, initMessage);
+    //strcpy(currentMessage, initMessage);
     Serial.println();
     Serial.print("Access Point \"");
     Serial.print(ssidAP);
     Serial.println("\" started\r\n");
     Serial.println("Waiting for connection ...");
+
+    mqAddAt(0, String(initMessage));
     while(WiFi.softAPgetStationNum() < 1)               // Wait for the Wi-Fi to connect
     {
         delay(20);
         scrollText(1);
     }
+    mqDelete(0);
     Serial.print("Station connected to AP \"Die Zeile\"\n\n");
 }
 
@@ -1641,10 +2034,14 @@ void startWebSocket()
 // Start a HTTP server with a file read handler and an upload handler
 void startServer()
 {
-    server.on("/set", handleSet);              // set request
+    server.on("/set", handleSet);              // If a POST request is sent to the /set address
     server.on("/edit.html",  HTTP_POST, [](){  // If a POST request is sent to the /edit.html address,
     server.send(200, "text/plain", ""); 
     }, handleFileUpload);                      // Go to 'handleFileUpload'
+
+    server.on("/timer.html",  HTTP_POST, [](){ // If a POST request is sent to the /edit.html address,
+    server.send(200, "text/plain", ""); 
+    }, handleTimer);                           // Go to 'handleTimer'
 
     server.onNotFound(handleNotFound);         // If someone requests any other file or page, go to function 'handleNotFound'
                                                // and check if the file exists
@@ -1676,8 +2073,9 @@ void setup()
     
     Serial.begin(115200);        // Start the Serial communication to send messages to the computer
     delay(10);
-    Serial.println("\r\n");
-
+    Serial.printf("\n******************************************\n");
+    Serial.printf("DieZeile Version %s\n", DieZeileVersion.c_str());
+    
     eepromReadConfig();          // Read configuration from EEPROM
     
     startDisplay();              // Start the LED Matrix Display
@@ -1687,7 +2085,6 @@ void setup()
     if(startSTA())               // Start WiFi Station mode and connect to AP with credentials from config struct
     {
         startMDNS();             // Start MDNS when connection succeeded
-        //mqAddAt(0, String(config.message));
         strcpy(currentMessage, config.message);
     }
     else
@@ -1726,19 +2123,21 @@ void loop()
     ArduinoOTA.handle();          // Listen for OTA events
     updateTime();                 // Update currentTime variable
 
+    if(config.mode==MODE_TIMER) {
+      modeTimer(config.timerTime,config.clockFont);
+      return;
+    }
+      
     if(config.secretWindow!=0)
       handleSecret(config.secretPeriod, config.secretWindow);        // look up for a secret to display
     
     switch(config.mode)
     {
       case MODE_CLOCK:
-          showClock(true);
+          showClock(config.clockMode);
           break;
       case MODE_MATH_CLOCK:
-          showMathClock(false);
-          break;
-      case MODE_ADDONLY_CLOCK:
-          showMathClock(true);
+          showMathClock(config.mathMode);
           break;
       case MODE_PROGRESS_TIME:
           showProgressClock();
@@ -1749,15 +2148,18 @@ void loop()
       case MODE_FONT_CLOCK:
           showFontClock(config.clockFont, true);
           break;
+      case MODE_PERCENT_CLOCK:
+          showPercentClock();
+          break;
       case MODE_TEXT_CLOCK:
           showTextClock(false);
-          break;
-      case MODE_SCROLLING_TEXT:
           break;
       default:
           break;
     }
 
+    displayModeBlink(2000, 5000, config.displayMode);
+    
     switch(config.mode)
     {
       case MODE_TEXT_CLOCK:
