@@ -14,6 +14,7 @@
 #define CHAR_ARROW_DOWN_5x7   25
 #define CHAR_COLON_2X8        147
 #define CHAR_COLON_3X8        158
+#define CHAR_COLON_5X7        173
 
 const uint8_t charset[] PROGMEM = {
   0,                                                        // 0 - 'Empty Cell'

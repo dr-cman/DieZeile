@@ -159,10 +159,16 @@ function sendOperationMode(mode) {
     connection.send(sendStr);
 }
 
+function sendDisplayMode(mode) {
+    var sendStr = 'dm'+ mode;    
+    console.log('Display: ' + sendStr); 
+    connection.send(sendStr);
+}
+
 function sendDisplayPeriod() {
     var i = document.getElementById('periodID').value;
     var sendStr = 'dp'+ i.toString(10);    
-    console.log('Speed: ' + sendStr); 
+    console.log('Display: ' + sendStr); 
     connection.send(sendStr);
 }
 
