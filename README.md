@@ -1,4 +1,4 @@
-# DieZeile
+![DieZeile](/data/DieZeile.png?raw=true)
 
 An ESP8266 based 64x8 LED matrix display with wlan connectivity and browser based configuration interface. This project is a joint development effort of Werner Gergen, Eik Arnold and Claudio Laloni.
 
