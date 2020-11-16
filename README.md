@@ -2,7 +2,7 @@
 
 An ESP8266 based 64x8 LED matrix display with wlan connectivity and browser based configuration interface. This project is a joint development effort of Werner Gergen, Eik Arnold and Claudio Laloni.
 
-<h2>Featured operation modes</h2>
+<h2>Operation modes</h2>
 
 'DieZeile' features different operation modes to display the current time/date information, to offer a timer/stop watch function or a scrolling display of user configurable information messages or the current time
 
@@ -66,16 +66,20 @@ The display elements are connected 1:1 (module 1 uot to module 2 in)
 | CS      | D8     |
 | CLK     | D5     |
 
-<h3>Housing</h3>
+<h2>Housing</h2>
 coming soon...
 
-<h3>Web Interfaces</h3>
+<h2>Web Interfaces</h2>
 
-![](/doc/GUI_DieZeile.jpg?raw=true) main configuration interface
-![](/doc/GUI_timer.jpg?raw=true) Timer/Stop watch interface
+<h3>Configuration Interface</h3>
 
+![](/doc/GUI_DieZeile.jpg?raw=true) 
 
-<h3>Build and Flash the System</h3>
+<h3>Timer/Stop watch interface</h3>
+
+![](/doc/GUI_timer.jpg?raw=true) 
+
+<h2>Build and Flash the System</h2>
 The code can be compiled and up-loaded to the ESP with the Arduino IDE 
 
 1. Install Arduino IDE (https://www.arduino.cc/en/software)
