@@ -69,6 +69,12 @@ The display elements are connected 1:1 (module 1 uot to module 2 in)
 <h3>Housing</h3>
 coming soon...
 
+<h3>Web Interfaces</h3>
+
+![](/doc/GUI_DieZeile.jpg?raw=true) main configuration interface
+![](/doc/GUI_timer.jpg?raw=true) Timer/Stop watch interface
+
+
 <h3>Build and Flash the System</h3>
 The code can be compiled and up-loaded to the ESP with the Arduino IDE 
 
