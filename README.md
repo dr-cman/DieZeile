@@ -56,7 +56,7 @@ An ESP8266 based 64x8 LED matrix display with wlan connectivity and browser base
 
 <h3>Wiring</h3>
 
-The display elements are connected 1:1 (module 1 uot to module 2 in)
+The display elements are connected 1:1 (module 1 out to module 2 in)
 
 | Display |  ESP   |
 |---------|--------|
@@ -87,7 +87,7 @@ The code can be compiled and up-loaded to the ESP with the Arduino IDE
 3. Under Tools -> Boards -> Boardmanager install the 'esp8266' by ESP8266 Community
 4. Under Tools -> Boards select Board 'Wemos D1 R1'
 5. Search and install under Tools -> Manage Libraries the library 'MD_MAX722XX' by majicDesigns
-6. Get arduinoWebSockets-master.zip (where?)
+6. Get arduinoWebSockets-master.zip from https://github.com/Links2004/arduinoWebSockets 
 7. Add arduinoWebSockets-master.zip under Sketch -> Include Library -> Add Zip library
 8. Download ESP8266FS-0.5.0.zip from https://github.com/esp8266/arduino-esp8266fs-plugin/releases
 9. Copy extracted zip file content into the arduion tools directory (result should look like Arduino/tools/ESP8266FS/tool/esp8266fs.jar)
@@ -98,7 +98,7 @@ Now everything is set-up for the build process.
 2. Under Tools->Erase Flash select 'All Flash Contents'
 3. Start compile and upload (Ctrl-U)
 4. After successful compilation and upload set Tools->Erase Flash to 'Sketch + Wifi Settings'
-5. Use Tools->ESP8266 Sketch Data Upload to upload the all files to the flash file system
+5. Use Tools->ESP8266 Sketch Data Upload to upload all files to the flash file system
 6. After reboot of the ESP connect to the GUI via web browser (https://DieZeile.local or https://<ip-address>)
   
 Enjoy!
