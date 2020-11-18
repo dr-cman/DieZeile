@@ -90,7 +90,7 @@ The code can be compiled and up-loaded to the ESP with the Arduino IDE
 6. Get arduinoWebSockets-master.zip from https://github.com/Links2004/arduinoWebSockets 
 7. Add arduinoWebSockets-master.zip under Sketch -> Include Library -> Add Zip library
 8. Download ESP8266FS-0.5.0.zip from https://github.com/esp8266/arduino-esp8266fs-plugin/releases
-9. Copy extracted zip file content into the arduion tools directory (result should look like Arduino/tools/ESP8266FS/tool/esp8266fs.jar)
+9. Copy extracted zip file content into the arduino tools directory (result should look like Arduino/tools/ESP8266FS/tool/esp8266fs.jar)
 
 Now everything is set-up for the build process.
 
