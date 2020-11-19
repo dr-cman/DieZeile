@@ -15,7 +15,7 @@
 <body>
 	<center>
         <header >
-            <h1><img src='DieZeile.png' style="vertical-align:bottom; border:2px solid black" width="390px"/></h1>
+            <h1><img src='DieZeile.png' style="vertical-align:bottom; border:2px solid black" width="300px"/></h1>
             <!-- <h1>Die Zeile</h1> --->
 		</header>
 		<div>
@@ -113,32 +113,28 @@
 				<tr>
                     <td style="text-align: right">Classic</td>
 					<td>
-                    <label class="radio-inline">
-                        <input type="checkbox" id="fontClockMonatID" name="monat" onchange="setClockMonat()">Monatsname
-					</label>                    
+						<input type="checkbox" id="fontClockMonatID" name="monat" onchange="setClockMonat()">
+						<label class="radio-inline">Monatsname</label> 
+					</td>
                 </tr>
 				<tr>
                     <td style="text-align: right">Mathe</td>
 					<td>
-                    <label class="radio-inline">
-                        <input type="radio" id="setMathModeAllID" name="math" onchange="setClockMathMode(0)">plus/minus/mal/geteilt
-					</label>                    
-                    <label class="radio-inline">
-                        <input type="radio" id="setMathModeAddID" name="math" onchange="setClockMathMode(1)">plus
-					</label>                    
+						<input type="radio" id="setMathModeAllID" name="math" onchange="setClockMathMode(0)">
+						<label class="radio-inline">plus/minus/mal/geteilt</label> 
+						<input type="radio" id="setMathModeAddID" name="math" onchange="setClockMathMode(1)">
+						<label class="radio-inline">plus</label>                    
+					</td>
                 </tr>
 				<tr>
                     <td style="text-align: right">Font</td>
 					<td>
-                    <label class="radio-inline">
-                        <input type="radio" id="fontClassicID" name="font" onchange="setClockFont(2)">normal
-					</label>                    
-                    <label class="radio-inline">
-                        <input type="radio" id="fontSmallID" name="font" onchange="setClockFont(0)">eng
-					</label>                    
-                    <label class="radio-inline">
-                        <input type="radio" id="fontBoldID" name="font" onchange="setClockFont(1)">breit
-					</label>                    
+						<input type="radio" id="fontClassicID" name="font" onchange="setClockFont(2)">
+						<label class="radio-inline">normal</label>                    
+						<input type="radio" id="fontSmallID" name="font" onchange="setClockFont(0)">
+						<label class="radio-inline">eng</label>                    
+						<input type="radio" id="fontBoldID" name="font" onchange="setClockFont(1)">
+						<label class="radio-inline">breit</label>                    
 					</td>
                 </tr>
                 <tr>
@@ -167,7 +163,7 @@
                 <tr>
                     <td style="text-align: right">Tempo </td>
                     <td>
-                        <input id="speedID" type="range" style="width: 250px" in="5" max="42" step="1" oninput="sendSpeed()" value="30">
+                        <input id="speedID" type="range" style="width: 220px" min="5" max="42" step="1" oninput="sendSpeed()" value="30">
                     </td>
                 </tr>
                 <tr>
@@ -176,13 +172,13 @@
                 <tr>
                     <td style="text-align: right" id="secretPeriodValueID">Period [sec]</td>
                     <td>
-                        <input id="secretPeriodID" type="range" min="30" max="360" step="30" oninput="sendSecretPeriodInSec()" value="30">
+                        <input id="secretPeriodID" type="range" style="width: 220px" min="30" max="360" step="30" oninput="sendSecretPeriodInSec()" value="30">
                     </td>
                 </tr>
                 <tr>
                     <td style="text-align: right" id="secretWindowValueID">Window [sec]</td>
                     <td>
-                        <input id="secretWindowID" type="range" min="0" max="3600" step="60" oninput="sendSecretWindowInSec()" value="60">
+                        <input id="secretWindowID" type="range" style="width: 220px" min="0" max="3600" step="60" oninput="sendSecretWindowInSec()" value="60">
                     </td>
                 </tr>
             </table>

@@ -43,6 +43,10 @@ connection.onmessage = function (e) {
 		console.log('Timer: ' + message + ' (remaining time)');
 		setDigits(remainingTime);
 		
+		if(message=="0") {
+			document.getElementById('timerStartStopID').innerHTML="DONE";			
+			timerRefreshEnd=true;
+		}
 		if(timerRefreshEnd) {
 			window.clearInterval(timer);
 			timerRefreshEnd=false;
@@ -104,13 +108,22 @@ function timerStartPause() {
 	
     console.log('Timer: Button=' + mode); 
 
-	if(mode=='START') {
+	if(mode=='DONE') {
+		document.getElementById('timerStartStopID').innerHTML="START";
+		var sendStr = 'ts0';    
+		console.log('Timer: ' + sendStr + ' (reset)'); 
+		connection.send(sendStr);
+
+		refreshTimer(); // get original timer time		
+	}
+	else if(mode=='START') {
 		document.getElementById('timerStartStopID').innerHTML="PAUSE";
 		
+		// start timer
 		// start refresher
+		timerRefreshEnd=false;
 		timer=window.setInterval(refreshTimer, 1000);
 		
-		// pause timer
 		sendStr = 'ts1';    
 		console.log('Timer: ' + sendStr + ' (start)'); 
 		connection.send(sendStr);
@@ -118,10 +131,10 @@ function timerStartPause() {
 	else {
 		document.getElementById('timerStartStopID').innerHTML="START";
 
+		// pause timer
 		// stop refresher
 		timerRefreshEnd=true;
-		
-		// start timer
+	
 		sendStr = 'ts2';    
 		console.log('Timer: ' + sendStr + ' (pause)'); 
 		connection.send(sendStr);

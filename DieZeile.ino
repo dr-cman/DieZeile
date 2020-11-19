@@ -72,7 +72,7 @@
 //#define DEBUG_CLOCK                           // clock
 #define DEBUG_SECRETS                         // secrets
 //#define DEBUG_SECRETS_MESSAGES                // secret messages
-//#define DEBUG_TIMER                           // timer
+#define DEBUG_TIMER                           // timer
 //#define DEBUG_WEBSOCKET                       // websocket
 
 #define DATA_PIN                           13 // DIN Scroll Matrix
@@ -166,9 +166,9 @@ enum { CM_MONTH_ASDIGIT=00, CM_MONTH_ASSTRING=1 };                              
 const char *clockModes[] = { "month as digit", "month as string" };             // display mode strings
 
 // timer states ---------------------------  
-enum { TS_SET=0, TS_RUNNING=1, TS_PAUSE=2, TS_EXIT=3 } timerState = TS_SET;     // timer states
-const char *timerStates[] = { "TS_SET", "TS_RUNNING", "TS_PAUSE", "TS_EXIT" };  // timer state strings
-int remainingSeconds=0;                                                         // remaining timer time
+enum { TS_SET=0, TS_RUNNING=1, TS_PAUSE=2, TS_EXIT=3 , TS_DONE=4} timerState = TS_SET;     // timer states
+const char *timerStates[] = { "TS_SET", "TS_RUNNING", "TS_PAUSE", "TS_EXIT" , "TS_DONE"};  // timer state strings
+uint32_t remainingSeconds=0;                                                    // remaining timer time
 
 // configuration --------------------------  
 typedef struct t_config {                   // config struct storing all relevant data in EEPROM
@@ -297,7 +297,7 @@ void printConfiguration(Config config)
     Serial.printf("Configuration:\n");
     Serial.printf("MAC:          %s\n",      config.MAC);
     Serial.printf("brightness:   %d\n",      config.brightness);
-    Serial.printf("mode:         %d (%s)\n", config.mode, operationModes[config.mode]);
+    Serial.printf("mode:         %d (%s)\n", config.mode, operationModes[config.mode-1]);
     Serial.printf("speed:        %d\n",      config.speed);
     Serial.printf("secretPeriod: %d sec\n",  config.secretPeriod);
     Serial.printf("secretWindow: %d sec\n",  config.secretWindow);
@@ -1487,13 +1487,15 @@ void displaySquare(uint8_t px, uint8_t py, uint8_t sx, uint8_t sy, bool on)
 void showMathClock(bool addonly)
 {
     #define MAX_CHARS_MATHCLOCK 12                                     // '0+0+0 0+0+0' + terminating \0
+    static uint32_t lastMillis=0;
+    uint32_t actMillis=millis();
     static uint8_t lastTimeString[MAX_CHARS_MATHCLOCK];
     int hour=currentTime->tm_hour;
     int minutes=currentTime->tm_min;
 
-    if((millis() > prevMillis + MATH_CLOCK_INTERVAL) || (display_mode_changed == true))
+    if((actMillis > lastMillis + MATH_CLOCK_INTERVAL) || (display_mode_changed == true))
     {          
-        prevMillis = millis();
+        lastMillis = actMillis;
         if(display_mode_changed) {
           display_mode_changed = false;
           strncpy((char *)lastTimeString, "x.x.x x.x.x", MAX_CHARS_MATHCLOCK);
@@ -1674,11 +1676,14 @@ void modeTimer(int secTimerTime, int font)
                   lastMillis=actMillis;                                               // save time of last update
 
 
-                  if(0<=remainingSeconds || remainingSeconds<=354460) {                // do count up/down 354460sec = 99hours+59minutes
+                  if(0<remainingSeconds && remainingSeconds<=354460) {                // do count up/down 354460sec = 99hours+59minutes
                     timerTimeString(remainingSeconds, timeString, MAX_CHARS_TIMER, timerCountdown, font);
                     displayString(0, MAX_CHARS_TIMER-1, 63, timeString, lastTimeString);
                   }
-                  else timerState=TS_SET;                                             // count down or count up end reached
+                  else {
+                    timerState=TS_DONE;                                               // count down or count up end reached
+                    if(remainingSeconds<0) remainingSeconds=0;                  
+                  }
                 }
             }
             break;
@@ -1693,6 +1698,17 @@ void modeTimer(int secTimerTime, int font)
             }
             break;
 
+      case TS_DONE:
+                if(secDeltaTime>=1) {
+                  lastMillis=actMillis;      
+                  timerTimeString(0, timeString, MAX_CHARS_TIMER, timerCountdown, font);  // display 0
+                  displayString(0, MAX_CHARS_TIMER-1, 63, timeString, lastTimeString);
+                  #ifdef DEBUG_TIMER
+                  Serial.printf("Timer TS_DONE    %d sec %s\n", remainingSeconds, (timerCountdown?"remaining":"elapsed"));
+                  #endif
+                }
+            break;
+            
       case TS_EXIT: {    // timer mode ended
                   #ifdef DEBUG_TIMER
                   Serial.printf("Timer TS_EXIT\n");
