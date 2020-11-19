@@ -2,7 +2,7 @@
 
 An ESP8266 based 64x8 LED matrix display with wlan connectivity and browser based configuration interface. This project is a joint development effort of Werner Gergen, Eik Arnold and Claudio Laloni.
 
-<h2>Featured operation modes</h2>
+<h2>Operation modes</h2>
 
 'DieZeile' features different operation modes to display the current time/date information, to offer a timer/stop watch function or a scrolling display of user configurable information messages or the current time
 
@@ -56,7 +56,7 @@ An ESP8266 based 64x8 LED matrix display with wlan connectivity and browser base
 
 <h3>Wiring</h3>
 
-The display elements are connected 1:1 in to out.
+The display elements are connected 1:1 (module 1 out to module 2 in)
 
 | Display |  ESP   |
 |---------|--------|
@@ -66,14 +66,39 @@ The display elements are connected 1:1 in to out.
 | CS      | D8     |
 | CLK     | D5     |
 
-<h3>Housing</h3>
+<h2>Housing</h2>
 coming soon...
 
-<h3>Building and Flash</h3>
+<h2>Web Interfaces</h2>
+
+<h3>Configuration Interface</h3>
+
+![](/doc/GUI_DieZeile.jpg?raw=true) 
+
+<h3>Timer/Stop watch interface</h3>
+
+![](/doc/GUI_timer.jpg?raw=true) 
+
+<h2>Build and Flash the System</h2>
 The code can be compiled and up-loaded to the ESP with the Arduino IDE 
 
 1. Install Arduino IDE (https://www.arduino.cc/en/software)
-2. Add http://arduino.esp8266.com/stable/package_esp8266com_index.json under 
-3. Select ...
+2. Add http://arduino.esp8266.com/stable/package_esp8266com_index.json under File -> Preferences -> Settings 'Additional Boards Manager URL's'
+3. Under Tools -> Boards -> Boardmanager install the 'esp8266' by ESP8266 Community
+4. Under Tools -> Boards select Board 'Wemos D1 R1'
+5. Search and install under Tools -> Manage Libraries the library 'MD_MAX722XX' by majicDesigns
+6. Get arduinoWebSockets-master.zip from https://github.com/Links2004/arduinoWebSockets 
+7. Add arduinoWebSockets-master.zip under Sketch -> Include Library -> Add Zip library
+8. Download ESP8266FS-0.5.0.zip from https://github.com/esp8266/arduino-esp8266fs-plugin/releases
+9. Copy extracted zip file content into the arduino tools directory (result should look like Arduino/tools/ESP8266FS/tool/esp8266fs.jar)
 
-to be completed soon...
+Now everything is set-up for the build process.
+
+1. Edit the file WlanCredentials.h and enter the name and password of your wlan access point. An optional second AP and password can be specified as well here.
+2. Under Tools->Erase Flash select 'All Flash Contents'
+3. Start compile and upload (Ctrl-U)
+4. After successful compilation and upload set Tools->Erase Flash to 'Sketch + Wifi Settings'
+5. Use Tools->ESP8266 Sketch Data Upload to upload all files to the flash file system
+6. After reboot of the ESP connect to the GUI via web browser (https://DieZeile.local or https://<ip-address>)
+  
+Enjoy!
