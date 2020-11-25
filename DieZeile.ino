@@ -24,7 +24,7 @@
 //        display the time as a (german) text string, like 'Viertel vor Acht'
 //    - eeprom initialization modified to eliminate need of flashing the device twice
 //    - configurable secrets added
-//        the secrets are read from file secrets.txt that is stored in the SPIFFS file system at system startup
+//        the secrets are read from file secrets.txt that is stored in the LittleFS file system at system startup
 //        instead of using hard-coded texts
 //    - secrets function modified
 //        secrets are displayed at random time intervals. Lower and upper limit of the time interval can be
@@ -49,7 +49,7 @@
 //    - additional 'blink' display modes added
 //
 //  ToDo:
-//    - replacement of deprecated SPIFFS functions (to be replaced by FS functions)
+//    - replacement of deprecated LittleFS functions (to be replaced by FS functions)
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #include <ArduinoOTA.h>
@@ -58,7 +58,7 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
 #include "FontData.h"
-#include <FS.h>
+#include <LittleFS.h>
 #include <MD_MAX72xx.h>
 #include <SPI.h>
 #include <string.h>
@@ -198,7 +198,7 @@ typedef struct t_Secret {                   // Secret struct to store secret inf
   int month;                                // month
   size_t position;                          // index to file position of secret text
 } Secret;
-Secret *Secrets=NULL;                       // dynamically loaded secrets (from SPIFFS file secrets.txt)
+Secret *Secrets=NULL;                       // dynamically loaded secrets (from LittleFS file secrets.txt)
 
 /*************************************************************************************************************************************/
 /*************************************************   H E L P E R   F U N C T I O N S   ***********************************************/
@@ -319,7 +319,7 @@ void printConfiguration(Config config)
 // If the requested file or page doesn't exist, return a 404 not found error
 void handleNotFound()
 {
-    if(!handleFileRead(server.uri())) // Check if the file exists in the flash memory (SPIFFS), if so, send it
+    if(!handleFileRead(server.uri())) // Check if the file exists in the flash memory (LittleFS), if so, send it
     {
         server.send(404, "text/plain", "404: File Not Found");
     }
@@ -332,13 +332,13 @@ bool handleFileRead(String path)
     if (path.endsWith("/")) path += "index.html";           // If a folder is requested, send the index file
     String contentType = getContentType(path);              // Get the MIME type
     String pathWithGz = path + ".gz";
-    if(SPIFFS.exists(pathWithGz) || SPIFFS.exists(path))    // If the file exists, either as a compressed archive, or normal
+    if(LittleFS.exists(pathWithGz) || LittleFS.exists(path))    // If the file exists, either as a compressed archive, or normal
     {
-        if(SPIFFS.exists(pathWithGz))                       // If there's a compressed version available
+        if(LittleFS.exists(pathWithGz))                       // If there's a compressed version available
         {
             path += ".gz";                                  // Use the compressed verion
         }
-        File file = SPIFFS.open(path, "r");                 // Open the file
+        File file = LittleFS.open(path, "r");                 // Open the file
         server.streamFile(file, contentType);               // Send it to the client
         file.close();                                       // Close the file again
         Serial.println(String("\tSent file: ") + path);
@@ -408,7 +408,7 @@ void handleTimer()
 {
 }
 
-// Upload a new file to the SPIFFS
+// Upload a new file to the LittleFS
 void handleFileUpload()
 {
     HTTPUpload& upload = server.upload();
@@ -423,13 +423,13 @@ void handleFileUpload()
         if(!path.endsWith(".gz"))                               // The file server always prefers a compressed version of a file 
         {
             String pathWithGz = path+".gz";                     // So if an uploaded file is not compressed, the existing compressed
-            if(SPIFFS.exists(pathWithGz))                       // version of that file must be deleted (if it exists)
+            if(LittleFS.exists(pathWithGz))                       // version of that file must be deleted (if it exists)
             {
-                SPIFFS.remove(pathWithGz);
+                LittleFS.remove(pathWithGz);
             }
         }
         Serial.print("handleFileUpload Name: "); Serial.println(path);
-        fsUploadFile = SPIFFS.open(path, "w");                  // Open the file for writing in SPIFFS (create if it doesn't exist)
+        fsUploadFile = LittleFS.open(path, "w");                  // Open the file for writing in LittleFS (create if it doesn't exist)
         path = String();
     }
     else if(upload.status == UPLOAD_FILE_WRITE)
@@ -1854,7 +1854,7 @@ void handleDisplayMode(uint32_t msPeriod, int count, int mode)
 
 // ------------------------------------------------------------------------------------------------------------------------------------
 // readSecretsFromFile()
-//    read a list of secrets from a the file secrets.txt in the SPIFFS file system
+//    read a list of secrets from a the file secrets.txt in the LittleFS file system
 //    Each line in the file secrets.txt must have the following fixed format:
 //    <int>, <int>, <any text>\n11
 //
@@ -1871,14 +1871,14 @@ bool readSecretsFromFile()
   int iLine=0;
 
   Serial.printf("\nLooking for secrets...\n");
-  if(!SPIFFS.exists(SECRETS_FILENAME)) {
+  if(!LittleFS.exists(SECRETS_FILENAME)) {
     Serial.printf("could not find secrets file %s\n", SECRETS_FILENAME);
     return false;
   }
 
   Serial.printf("found secrets.txt, reading ...\n");
 
-  secretFile=SPIFFS.open(SECRETS_FILENAME, "r");
+  secretFile=LittleFS.open(SECRETS_FILENAME, "r");
   nofLines=0;                                         // determine the numbrer of lines in the file
   while(secretFile.available()) {                     // still chars to read
     char inChar=secretFile.read();    
@@ -1893,7 +1893,7 @@ bool readSecretsFromFile()
     return false;                                     //   return
   }
 
-  secretFile=SPIFFS.open(SECRETS_FILENAME, "r");
+  secretFile=LittleFS.open(SECRETS_FILENAME, "r");
   #define MAX_FILE_LINESIZE 500
   char buffer[MAX_FILE_LINESIZE];
   char secret[MAX_FILE_LINESIZE];
@@ -1959,7 +1959,7 @@ void handleSecret(int minDistanceSeconds, int widthTimeframeSeconds)
       }
 
       if(poolIndex>0) {                                                         // at least one secret found
-        File secretFile=SPIFFS.open(SECRETS_FILENAME, "r");
+        File secretFile=LittleFS.open(SECRETS_FILENAME, "r");
         
         #ifdef DEBUG_SECRETS
         Serial.printf("%d matching secrets\n", poolIndex);    
@@ -2122,14 +2122,14 @@ void startMDNS(void)
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------------
-// Start the SPIFFS and list all contents
+// Start the LittleFS and list all contents
 // ------------------------------------------------------------------------------------------------------------------------------------
-void startSPIFFS()
+void startLittleFS()
 {
-    SPIFFS.begin();                                   // Start the SPI Flash File System (SPIFFS)
-    Serial.println("SPIFFS started. Contents:");
+    LittleFS.begin();                                   // Start the SPI Flash File System (LittleFS)
+    Serial.println("LittleFS started. Contents:");
     {
-        Dir dir = SPIFFS.openDir("/");
+        Dir dir = LittleFS.openDir("/");
         while(dir.next())                             // List the file system contents
         {
             String fileName = dir.fileName();
@@ -2232,7 +2232,7 @@ void setup()
     
     eepromReadConfig();          // Read configuration from EEPROM
     startDisplay();              // Start the LED Matrix Display
-    startSPIFFS();             // Start the SPIFFS and list all contents
+    startLittleFS();             // Start the LittleFS and list all contents
 
     if(startSTA(String(config.ssid), String(config.password))) {    // Start WiFi Station mode and connect to AP with credentials from config struct
         startMDNS();                                                // Start MDNS when connection succeeded
