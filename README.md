@@ -102,6 +102,6 @@ Now everything is set-up for the build process.
 3. Start compile and upload (Ctrl-U)
 4. After successful compilation and upload set **Tools->Erase Flash** to 'Sketch + Wifi Settings'
 5. Use **Tools->ESP8266 LittleFS Data Upload** to upload all files to the flash file system
-6. After reboot of the ESP connect to the GUI via web browser (https://DieZeile.local or https://<ip-address>)
+6. After reboot of the ESP connect to the GUI via web browser (https://DieZeile.local or https://ip-address)
   
 Enjoy!
