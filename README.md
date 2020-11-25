@@ -68,6 +68,7 @@ The display elements are connected 1:1 (module 1 out to module 2 in)
 
 
 <img src="/doc/HardwareSetup.jpg" width="500">
+<img src="/doc/HardwareSetup_front.jpg" width="500">
 
 <h2>Housing</h2>
 coming soon...
