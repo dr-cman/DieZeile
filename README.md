@@ -68,6 +68,7 @@ The display elements are connected 1:1 (module 1 out to module 2 in)
 
 
 <img src="/doc/HardwareSetup.jpg" width="500">
+<img src="/doc/HardwareSetup_front.jpg" width="500">
 
 <h2>Housing</h2>
 coming soon...
@@ -87,9 +88,9 @@ The code can be compiled and up-loaded to the ESP with the Arduino IDE
 
 1. Install Arduino IDE (https://www.arduino.cc/en/software)
 2. Add http://arduino.esp8266.com/stable/package_esp8266com_index.json under File -> Preferences -> Settings 'Additional Boards Manager URL's'
-3. Under Tools -> Boards -> Boardmanager install the 'esp8266' by ESP8266 Community
-4. Under Tools -> Boards select Board 'Wemos D1 R1'
-5. Search and install under Tools -> Manage Libraries the library 'MD_MAX722XX' by majicDesigns
+3. Under **Tools -> Boards -> Boardmanager** install the 'esp8266' by ESP8266 Community
+4. Under **Tools -> Boards** select Board 'Wemos D1 R1'
+5. Search and install under **Tools -> Manage Libraries** the library 'MD_MAX722XX' by majicDesigns
 6. Get arduinoWebSockets-master.zip from https://github.com/Links2004/arduinoWebSockets 
 7. Add arduinoWebSockets-master.zip under Sketch -> Include Library -> Add Zip library
 8. Download ESP8266LittleFS-2.6.0.zip from https://github.com/earlephilhower/arduino-esp8266littlefs-plugin/releases
@@ -98,10 +99,10 @@ The code can be compiled and up-loaded to the ESP with the Arduino IDE
 Now everything is set-up for the build process.
 
 1. Edit the file WlanCredentials.h and enter the name and password of your wlan access point. An optional second AP and password can be specified as well here.
-2. Under Tools->Erase Flash select 'All Flash Contents'
+2. Under **Tools->Erase Flash** select 'All Flash Contents'
 3. Start compile and upload (Ctrl-U)
-4. After successful compilation and upload set Tools->Erase Flash to 'Sketch + Wifi Settings'
-5. Use Tools->ESP8266 LittleFS Data Upload to upload all files to the flash file system
-6. After reboot of the ESP connect to the GUI via web browser (https://DieZeile.local or https://<ip-address>)
+4. After successful compilation and upload set **Tools->Erase Flash** to 'Sketch + Wifi Settings'
+5. Use **Tools->ESP8266 LittleFS Data Upload** to upload all files to the flash file system
+6. After reboot of the ESP connect to the GUI via web browser (https://DieZeile.local or https://ip-address)
   
 Enjoy!
