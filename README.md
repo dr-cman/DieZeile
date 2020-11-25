@@ -66,6 +66,9 @@ The display elements are connected 1:1 (module 1 out to module 2 in)
 | CS      | D8     |
 | CLK     | D5     |
 
+
+<img src="/doc/HardwareSetup.jpg" width="500">
+
 <h2>Housing</h2>
 coming soon...
 
@@ -73,11 +76,11 @@ coming soon...
 
 <h3>Configuration Interface</h3>
 
-![](/doc/GUI_DieZeile.jpg?raw=true) 
+<img src="/doc/GUI_DieZeile.jpg" width="400">
 
 <h3>Timer/Stop watch interface</h3>
 
-![](/doc/GUI_timer.jpg?raw=true) 
+<img src="/doc/GUI_timer.jpg" width="400">
 
 <h2>Build and Flash the System</h2>
 The code can be compiled and up-loaded to the ESP with the Arduino IDE 
