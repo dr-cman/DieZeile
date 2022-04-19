@@ -57,6 +57,7 @@
 #include <ESP8266mDNS.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266WiFiMulti.h>
 #include "FontData.h"
 #include <LittleFS.h>
 #include <MD_MAX72xx.h>
@@ -65,6 +66,10 @@
 #include <time.h>
 #include <WebSocketsServer.h>
 #include "WlanCredentials.h"
+
+#define STATIC_IP                             // use static IP
+#define STATIC_IP_ADDR                    74    // use 192.168.2.STATIC_IP_ADDR
+#define HOSTNAME                          "ESP8266_Zeile"
 
                                               // debugging defines
 //#define DEBUG_MQ                              // message queue
@@ -91,13 +96,13 @@
 #define MAX_NOF_MQMSG                       3 // maximum nuber of messages in message queue
 
 #define SCROLL_MIN_SPEED                    5 // Minimum speed for scrolling text
-#define SCROLL_MAX_SPEED                   42 // Maximum speed for scrolling text
+#define SCROLL_MAX_SPEED                   52 // Maximum speed for scrolling text
 
 #define SECRETS_FILENAME                   "/secrets.txt"
 /*************************************************************************************************************************************/
 /************************************************   G L O B A L   V A R I A B L E S   ************************************************/
 /*************************************************************************************************************************************/
-String DieZeileVersion="0.9 " + String(__DATE__) + " " + String(__TIME__);
+String DieZeileVersion="0.9.1 " + String(__DATE__) + " " + String(__TIME__);
 
 const char *ssidAP       = "Die Zeile";         // The name of the Wi-Fi network that will be created
 const char *passwordAP   = "DieZeile";          // The password required to connect to it, leave blank for an open network
@@ -129,6 +134,8 @@ MD_MAX72XX mx = MD_MAX72XX(HARDWARE_TYPE, DATA_PIN, CLOCK_PIN, LOAD_PIN, MAX_NOF
 
 ESP8266WebServer server(80);                // Create a web server on port 80
 WebSocketsServer webSocket(81);             // Create a websocket server on port 81
+
+ESP8266WiFiMulti wifiMulti;                 // needed for multiple SSID connection
 
 File fsUploadFile;                          // A File variable to temporarily store the received file
 
@@ -1583,7 +1590,7 @@ void showTextClock(bool longFormat)
             }
 
             if(longFormat) timeText="Es ist ";
-            if(Minute<3 || Minute>=58)
+            if(Minute<3)
                 if(Hour==0)       timeText+=                    "Mitternacht";              // special case 'Mitternacht'
                 else if(Hour==1)  timeText+=                    "Ein Uhr";                  // special case 'Eins' Uhr
                 else              timeText+=                    HourName[Hour%12] + " Uhr"; // other full hour
@@ -1598,6 +1605,9 @@ void showTextClock(bool longFormat)
             else if(Minute<48)  timeText+="Dreiviertel "    + HourName[++Hour%12];
             else if(Minute<53)  timeText+="Zehn vor "       + HourName[++Hour%12];
             else if(Minute<58)  timeText+="Fünf vor "       + HourName[++Hour%12];
+            else if(Minute>=58)
+                if(Hour==0)       timeText+=                    "Ein Uhr";                  // special case 'Mitternacht'
+                else              timeText+=                    HourName[++Hour%12] + " Uhr"; // other full hour
             else                timeText+="error";
 
             mqAddAt(0, timeText); 
@@ -2033,21 +2043,41 @@ void startDisplay()
 // ------------------------------------------------------------------------------------------------------------------------------------
 // Start Station mode and try to connect to given Access Point
 // ------------------------------------------------------------------------------------------------------------------------------------
-bool startSTA(String ssid, String password)
+bool startSTA()
 {
-    String msg="Connecting to '" + ssid + "' ...";
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
+    String msg="Connecting to '" + String(YOURWLANAP) + "' or '" + String(YOURWLANAP2) + "' ...";
+
+#ifdef STATIC_IP
+    msg = msg + "with static IP 192.168.2." + String(STATIC_IP_ADDR);
+     // Set Static IP address
+    IPAddress staticIP(192, 168, 2, STATIC_IP_ADDR);
+    IPAddress gateway(192, 168, 2, 1);
+    IPAddress subnet(255, 255, 255, 0);
+    IPAddress primaryDNS(192, 168, 2, 1);    
+    //IPAddress secondaryDNS(8, 8, 8, 8); 
+  
+    // Configures static IP address
+    if (!WiFi.config(staticIP, gateway, subnet, primaryDNS)) { 
+      Serial.println("STA Failed to configure");
+    }
+#endif
+
+    //WiFi.mode(WIFI_STA);
+    WiFi.hostname(HOSTNAME);
+    //WiFi.begin(ssid, password);
+    wifiMulti.addAP(YOURWLANAP, YOURPASSWORD);
+    wifiMulti.addAP(YOURWLANAP2, YOURPASSWORD2);
     mqAddAt(0, msg);
     Serial.println(msg);
     
     prevMillis = millis();
-    while((WiFi.status() != WL_CONNECTED) && (millis() < prevMillis + CONNECT_AP_TIMEOUT))
+    //while((WiFi.status() != WL_CONNECTED) && (millis() < prevMillis + CONNECT_AP_TIMEOUT))
+    while((wifiMulti.run(CONNECT_AP_TIMEOUT) != WL_CONNECTED) && (millis() < prevMillis + CONNECT_AP_TIMEOUT))
     {
         delay(20);
         scrollText(1);
     }
-    while(millis() < prevMillis + 5000) {
+    while(millis() < prevMillis + 8000) {
         delay(20);
         scrollText(1);
     }
@@ -2055,14 +2085,20 @@ bool startSTA(String ssid, String password)
 
     if(millis() < prevMillis + CONNECT_AP_TIMEOUT)
     {
-        Serial.printf("Connected to '%s' with IP address '%s'\n", 
-                      WiFi.SSID().c_str(), WiFi.localIP().toString().c_str()
-                      );                 // Tell us what network we're connected to
+        // Tell us what network we're connected to and all connection details
+        Serial.printf("Connected to '%s' with\n", WiFi.SSID().c_str());                 
+        Serial.printf("  IP address:  '%s'\n", WiFi.localIP().toString().c_str()); 
+        Serial.printf("  Hostname:    '%s'\n", WiFi.hostname().c_str());    
+        Serial.printf("  Subnet mask: '%s'\n", WiFi.subnetMask().toString().c_str());
+        Serial.printf("  Gateway IP:  '%s'\n", WiFi.gatewayIP().toString().c_str()); 
+        Serial.printf("  DNS1 IP:     '%s'\n", WiFi.dnsIP().toString().c_str());     
+        Serial.printf("  DNS2 IP:     '%s'\n", WiFi.dnsIP(1).toString().c_str());    
         connectedAP = true;
         
         prevMillis=millis();
-        mqAddAt(0, String(WiFi.localIP().toString()));
-        while(millis() < prevMillis + 8000) {
+        msg = "Connected to " + String(WiFi.localIP().toString());
+        mqAddAt(0, msg);
+        while(millis() < prevMillis + 12000) {
           delay(20);
           scrollText(1);
         }
@@ -2072,6 +2108,13 @@ bool startSTA(String ssid, String password)
     {
         connectedAP = false;
         Serial.printf("Connection failed\n");
+        msg = "Connection failed";
+        mqAddAt(0, msg);
+        while(millis() < prevMillis + 12000) {
+          delay(20);
+          scrollText(1);
+        }
+        mqDelete(0);
     }
 
     clearDisplay();
@@ -2234,11 +2277,17 @@ void setup()
     startDisplay();              // Start the LED Matrix Display
     startLittleFS();             // Start the LittleFS and list all contents
 
+    /*
     if(startSTA(String(config.ssid), String(config.password))) {    // Start WiFi Station mode and connect to AP with credentials from config struct
         startMDNS();                                                // Start MDNS when connection succeeded
         //strcpy(currentMessage, config.message);
     }
     else if(startSTA(String(YOURWLANAP2), String(YOURPASSWORD2))) { // try alternative AP
+        startMDNS();                                                // Start MDNS when connection succeeded
+        //strcpy(currentMessage, config.message);
+    }
+    */
+    if(startSTA()) {             // Start WiFi Station mode and connect to AP with credentials from config struct
         startMDNS();                                                // Start MDNS when connection succeeded
         //strcpy(currentMessage, config.message);
     }
